@@ -1,0 +1,32 @@
+[
+  {
+    "model": "o3-2025-04-16",
+    "api_key": "your-api-key",
+    "tags": ["o3", "coding", "explainer"],
+    "price": [2, 8]
+  },
+  {
+    "model": "o4-mini-2025-04-16",
+    "api_key": "your-api-key",
+    "tags": ["o4-mini", "coding", "explainer"],
+    "price": [1.1, 4.4]
+  },
+  {
+    "model": "gpt-5-mini-2025-08-07",
+    "api_key": "your-api-key",
+    "tags": ["gpt-5-mini", "coding", "explainer"],
+    "price": [0.25, 2]
+  },
+  {
+    "model": "gpt-5-2025-08-07",
+    "api_key": "your-api-key",
+    "tags": ["gpt-5", "coding", "explainer"],
+    "price": [1.25, 10]
+  },
+  {
+    "model": "computer-use-preview",
+    "api_key": "your-api-key",
+    "tags": ["computer-use-preview", "cua"],
+    "price": [3, 12]
+  }
+]
