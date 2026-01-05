@@ -115,6 +115,15 @@ python -m vllm.entrypoints.openai.api_server --served-model-name uitars-1.5-7b -
 
 ## ⚡ Environment Setup
 
+Run the automated setup script:
+```bash
+./scripts/setup_benchmarks.sh
+```
+
+This will:
+1. Clone Spider2-V and OSWorld repositories
+2. Copy HiSA-specific modifications from `setup/` directory
+
 ### Spider2-V Setup
 
 We primarily evaluate performance on the Abstract subset of Spider2-V while excluding 40 tasks involving DBT and BigQuery due to 2FA constraints. Please refer to the official github for the initial environment setup.
@@ -125,7 +134,7 @@ For ServiceNow tasks please use the new configuration method from WorkArena as t
 
 [https://github.com/ServiceNow/WorkArena](https://github.com/ServiceNow/WorkArena)
 
-Please copy the entire directory `setup/Spider2-V` to the root of your local Spider2-V benchmark folder. These modifications are necessary to fix session timeouts and enable dynamic resolution setting for the HiSA framework. Specific file changes are listed in the table below.
+The setup script already copies modifications from `setup/Spider2-V/` to `benchmarks/Spider2-V/`. These modifications are necessary to fix session timeouts and enable dynamic resolution setting for the HiSA framework. Specific file changes are listed in the table below.
 
 | File | Modification Scope |
 | --- | --- |
@@ -149,7 +158,7 @@ We also employ OSWorld to assess open-ended generalization. Please refer to the 
 
 [https://github.com/xlang-ai/OSWorld](https://github.com/xlang-ai/OSWorld)
 
-Please copy the entire directory `setup/OSWorld` to the root of your local OSWorld benchmark installation. These modifications are essential for automating resolution configuration and preventing VMware lock contention which frequently causes failures during repeated VM restarts. Specific file changes are listed in the table below.
+The setup script already copies modifications from `setup/OSWorld/` to `benchmarks/OSWorld/`. These modifications are essential for automating resolution configuration and preventing VMware lock contention which frequently causes failures during repeated VM restarts. Specific file changes are listed in the table below.
 
 | File | Modification Scope |
 | --- | --- |
@@ -168,11 +177,22 @@ Finally save the snapshot. You may name it `config` or any other identifier prov
 
 ## 🏃 Usage
 
-Please ensure the directory copying in the `Environment Patching` section is completed to place `run_all.py` in the benchmark directory. Please run the following command within the benchmark directory to initiate the HiSA evaluation. You may execute other methods by specifying the `--method` argument. Please refer to the `run` function in `run_all.py` for specific parameter details.
+We provide scripts to run HiSA and baseline methods. All scripts are located in the `scripts/` directory.
 
+Run HiSA:
+```bash
+./scripts/run_hisa.sh
+```
+
+Run Baselines:
+```bash
+./scripts/run_gta1.sh
+# ... other baseline scripts available in scripts/
+```
+
+For manual execution, refer to the `run` function in `benchmarks/Spider2-V/run_all.py` or `benchmarks/OSWorld/run_all.py` for detailed parameter descriptions. Example manual execution:
 ```bash
 python run_all.py --method hisa --result_dir results/hsa_gpt5_gta1_50 --snapshot config --global_planner_model gpt-5 --state_manager_model gpt-5-mini --visual_grounder_model gta1-7b --use_qdrant_server --max_steps 50 --test_all_meta_path evaluation_examples/test_abstract.json --headless
-python run_all.py --method hisa --result_dir results/debug --snapshot low_res --global_planner_model gpt-5 --state_manager_model gpt-5-mini --visual_grounder_model gta1-7b --max_steps 50 --test_all_meta_path evaluation_examples/test_one.json --headless --rerun
 ```
 
 ## 🧩 Acknowledgements

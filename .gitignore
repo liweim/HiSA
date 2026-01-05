@@ -6,8 +6,7 @@ tmp*
 *.log
 *.out
 configs
-/OSWorld
-/Spider2-V
+benchmarks
 
 # Model checkpoints
 *.pth

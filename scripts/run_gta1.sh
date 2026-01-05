@@ -1,0 +1,1 @@
+cd benchmarks/Spider2-V && python run_all.py --method gta1 --result_dir results/gta1_gpt5_gta1_50 --snapshot config --model gpt-5 --judge_model gpt-5 --max_steps 50 --test_all_meta_path evaluation_examples/test_abstract.json --headless

@@ -93,25 +93,11 @@ MODEL_CONFIGS = {
     "o3-2025-04-16": ModelConfig("OpenAIAPI", "o3-2025-04-16", 2, 8),
     "o4-mini": ModelConfig("OpenAIAPI", "o4-mini", 1.1, 4.4),
     "o4-mini-2025-04-16": ModelConfig("OpenAIAPI", "o4-mini-2025-04-16", 1.1, 4.4),
-    "gpt-5.2": ModelConfig("OpenAIAPI", "gpt-5.2", 1.75, 14),
-    # "gpt-5": ModelConfig("OpenAIAPI", "gpt-5", 1.25, 10),
-    "gpt-5": ModelConfig("Road2allAPI", "gpt-5", 1.25, 10),
+    "gpt-5": ModelConfig("OpenAIAPI", "gpt-5", 1.25, 10),
     "gpt-5-2025-08-07": ModelConfig("OpenAIAPI", "gpt-5-2025-08-07", 1.25, 10),
-    # "gpt-5-mini": ModelConfig("OpenAIAPI", "gpt-5-mini", 0.25, 2),
-    "gpt-5-mini": ModelConfig("Road2allAPI", "gpt-5-mini", 0.25, 2),
+    "gpt-5-mini": ModelConfig("OpenAIAPI", "gpt-5-mini", 0.25, 2),
     "gpt-5-mini-2025-08-07": ModelConfig("OpenAIAPI", "gpt-5-mini-2025-08-07", 0.25, 2),
     "computer-use-preview": ModelConfig("OpenAIAPI", "computer-use-preview", 3, 12),
-    "claude-3.5": ModelConfig("Road2allAPI", "claude-3-5-sonnet-20240620", 3, 15),
-    "claude-3-7-sonnet-20250219": ModelConfig("Road2allAPI", "claude-3-7-sonnet-20250219", 3, 15),
-    "claude-4": ModelConfig("Road2allAPI", "claude-sonnet-4-20250514", 3, 15),
-    "claude-4.5": ModelConfig("OpenRouterAPI", "anthropic/claude-sonnet-4.5", 3, 15),
-    "deepseek-v3": ModelConfig("Road2allAPI", "deepseek-v3", 0.24, 0.84),
-    "deepseek-r1": ModelConfig("Road2allAPI", "deepseek-reasoner", 0.4, 1.75),
-    "deepseek-v3.1": ModelConfig("OpenRouterAPI", "deepseek/deepseek-chat-v3.1:free", 0.2, 0.8),
-    "qwen2.5-vl-72b": ModelConfig("OpenRouterAPI", "qwen/qwen2.5-vl-72b-instruct", 0.07, 0.28),
-    "qwen3": ModelConfig("OpenRouterAPI", "qwen/qwen3-235b-a22b:free", 0, 0),
-    "gemini-2.5-pro": ModelConfig("Road2allAPI", "gemini-2.5-pro-preview-05-06", 1.25, 10),
-    "gemini-2.5-flash": ModelConfig("OpenRouterAPI", "google/gemini-2.5-flash", 0.3, 2.5),
     "uitars-1.5-7b": ModelConfig("LocalLLM", "uitars-1.5-7b", 0, 0),
     "gta1-7b": ModelConfig("LocalLLM", "gta1-7b", 0, 0),
 }
@@ -214,136 +200,6 @@ class MessageFormatter:
         Must be implemented by subclasses
         """
         raise NotImplementedError
-
-class OpenRouterMessageFormatter(MessageFormatter):
-    """OpenRouter API message formatter - converts OpenAI format to standard format"""
-    
-    @staticmethod
-    def format_for_api(messages: List[Dict]) -> List[Dict]:
-        """
-        Convert from OpenAI format to OpenRouter format:
-        OpenAI format (input):
-        {
-            "role": "user",
-            "content": [
-                {"type": "input_text", "text": "..."},
-                {"type": "input_image", "image_url": "data:image/png;base64,..."}
-            ]
-        }
-        
-        OpenRouter format (output):
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "..."},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
-            ]
-        }
-        """
-        formatted = []
-        for msg in messages:
-            formatted_msg = {"role": msg["role"]}
-            
-            if isinstance(msg["content"], list):
-                # Convert content items to OpenRouter format
-                content_list = []
-                for item in msg["content"]:
-                    if item.get("type") == "input_text":
-                        # Convert "input_text" to "text"
-                        content_list.append({
-                            "type": "text",
-                            "text": item["text"]
-                        })
-                    elif item.get("type") == "input_image":
-                        # Convert "input_image" to "image_url" with nested structure
-                        content_list.append({
-                            "type": "image_url",
-                            "image_url": {"url": item["image_url"]}
-                        })
-                    elif item.get("type") == "text":
-                        # Already in correct format
-                        content_list.append(item)
-                    elif item.get("type") == "image_url":
-                        # Already in correct format
-                        content_list.append(item)
-                    else:
-                        # Keep other types as-is (fallback)
-                        content_list.append(item)
-                
-                formatted_msg["content"] = content_list
-            else:
-                # Simple text message - keep as string
-                formatted_msg["content"] = msg["content"]
-            
-            formatted.append(formatted_msg)
-        
-        return formatted
-
-
-class Road2allMessageFormatter(MessageFormatter):
-    """Road2all API message formatter - converts OpenAI format to standard format"""
-    
-    @staticmethod
-    def format_for_api(messages: List[Dict]) -> List[Dict]:
-        """
-        Convert from OpenAI format to Road2all format:
-        OpenAI format (input):
-        {
-            "role": "user",
-            "content": [
-                {"type": "input_text", "text": "..."},
-                {"type": "input_image", "image_url": "data:image/png;base64,..."}
-            ]
-        }
-        
-        Road2all format (output):
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "..."},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
-            ]
-        }
-        """
-        formatted = []
-        for msg in messages:
-            formatted_msg = {"role": msg["role"]}
-            
-            if isinstance(msg["content"], list):
-                # Convert content items to Road2all format
-                content_list = []
-                for item in msg["content"]:
-                    if item.get("type") == "input_text":
-                        # Convert "input_text" to "text"
-                        content_list.append({
-                            "type": "text",
-                            "text": item["text"]
-                        })
-                    elif item.get("type") == "input_image":
-                        # Convert "input_image" to "image_url" with nested structure
-                        content_list.append({
-                            "type": "image_url",
-                            "image_url": {"url": item["image_url"]}
-                        })
-                    elif item.get("type") == "text":
-                        # Already in correct format
-                        content_list.append(item)
-                    elif item.get("type") == "image_url":
-                        # Already in correct format
-                        content_list.append(item)
-                    else:
-                        # Keep other types as-is (fallback)
-                        content_list.append(item)
-                
-                formatted_msg["content"] = content_list
-            else:
-                # Simple text message - keep as string
-                formatted_msg["content"] = msg["content"]
-            
-            formatted.append(formatted_msg)
-        
-        return formatted
-
 
 class BaseLLMClient:
     """Base class for LLM clients, defining unified interface"""
@@ -733,92 +589,6 @@ Analyze the screenshot carefully and return the code."""
         else:
             # Other models: use base class workflow
             return super().call_cua(instruction, image, environment, screen_width, screen_height)
-
-
-class Road2allAPI(BaseLLMClient):
-    """Road2all API client"""
-    
-    def __init__(self, model_name: str, temperature: float = 0, max_tokens: int = 4096):
-        super().__init__(model_name, temperature, max_tokens)
-        self.url = "https://api2.road2all.com/v1/chat/completions"
-        self.message_formatter = Road2allMessageFormatter()
-    
-    def __call__(self, messages: list) -> str:
-        headers = {
-            "Authorization": f"Bearer {ROAD2ALL_API_KEY}",
-            "Content-Type": "application/json",
-        }
-        
-        # Format messages for Road2all API
-        formatted_messages = self.format_messages(messages)
-        
-        data = {
-            "model": self.model_name,
-            "max_tokens": self.max_tokens,
-            "temperature": self.temperature,
-            "messages": formatted_messages,
-        }
-        
-        response = requests.post(self.url, headers=headers, json=data)
-        
-        if response.status_code == 200:
-            result_json = response.json()
-            result = result_json["choices"][0]["message"]["content"]
-            usage = result_json["usage"]
-            
-            # Update statistics
-            self.usage_stats.prompt_tokens += usage["prompt_tokens"]
-            self.usage_stats.completion_tokens += usage["completion_tokens"]
-            self.usage_stats.image_count += count_images_in_messages(messages)
-            
-            return result
-        else:
-            raise Exception(response.json()["error"]["message"])
-
-
-class OpenRouterAPI(BaseLLMClient):
-    """OpenRouter API client"""
-    
-    def __init__(self, model_name: str, temperature: float = 0, max_tokens: int = 4096):
-        super().__init__(model_name, temperature, max_tokens)
-        self.url = "https://openrouter.ai/api/v1/chat/completions"
-        self.headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-        }
-        self.message_formatter = OpenRouterMessageFormatter()
-    
-    def __call__(self, messages: list) -> str:
-        # Format messages for OpenRouter API
-        formatted_messages = self.format_messages(messages)
-        
-        data = json.dumps({
-            "model": self.model_name,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-            "messages": formatted_messages,
-        })
-        
-        response = requests.post(self.url, headers=self.headers, data=data)
-        
-        if response.status_code == 200:
-            result_json = response.json()
-            if "choices" not in result_json:
-                self.logger.error(f"Invalid response format: {result_json}")
-                raise Exception("Invalid response format")
-            
-            result = result_json["choices"][0]["message"]["content"]
-            usage = result_json["usage"]
-            
-            # Update statistics
-            self.usage_stats.prompt_tokens += usage["prompt_tokens"]
-            self.usage_stats.completion_tokens += usage["completion_tokens"]
-            self.usage_stats.image_count += count_images_in_messages(messages)
-            
-            return result
-        else:
-            raise Exception(response.json()["error"]["message"])
-
 
 class LocalLLM(BaseLLMClient):
     """Local LLM client for models like uitars-1.5-7b"""

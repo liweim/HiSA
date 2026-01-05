@@ -5,7 +5,7 @@ import json
 from typing import List
 from desktop_env.envs.desktop_env import DesktopEnv
 
-sys.path.append("../HiSA")
+sys.path.append("../..")
 from utils import summary, setup_logger
 
 # Global variables
