@@ -60,6 +60,8 @@ HiSA establishes a new state-of-the-art on the Spider2-V benchmark with a 40.58%
 
 ## 🛠️ Installation
 
+This tutorial is verified on Windows only. 
+
 Please create a conda environment and install the dependencies using the following commands.
 ```bash
 conda create -n hisa python=3.11

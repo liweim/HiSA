@@ -22,7 +22,7 @@ dashscope
 db-dtypes==1.2.0
 dbt-cloud-cli
 diskcache
-docker
+docker==7.1.0
 docker_py
 duckdb==0.10.1
 easyocr
@@ -98,8 +98,6 @@ python-docx
 python-dotenv
 python-pptx
 pytz~=2024.1
-pywin32
-pywinauto
 PyYaml
 qdrant-client==1.15.1
 rapidfuzz
