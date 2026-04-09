@@ -96,13 +96,6 @@ Download the model parameters for UI-TARS-1.5-7B and GTA1-7B from HuggingFace.
 * [https://huggingface.co/ByteDance-Seed/UI-TARS-1.5-7B](https://huggingface.co/ByteDance-Seed/UI-TARS-1.5-7B)
 * [https://huggingface.co/HelloKKMe/GTA1-7B](https://huggingface.co/HelloKKMe/GTA1-7B)
 
-Configure the environment for local deployment.
-```bash
-pip install -U transformers
-pip install vllm==0.11.0 --extra-index-url https://download.pytorch.org/whl/cu124
-pip install flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/ --break-system-packages
-```
-
 Launch the GTA1-7B server.
 ```bash
 python -m vllm.entrypoints.openai.api_server --served-model-name gta1-7b --model /path/to/GTA1-7B --port 1234
@@ -184,7 +177,7 @@ Run HiSA:
 ./scripts/run_hisa.sh
 ```
 
-Run Baselines:
+Run Baseline such as GTA1:
 ```bash
 ./scripts/run_gta1.sh
 # ... other baseline scripts available in scripts/
