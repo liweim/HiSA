@@ -8,7 +8,6 @@ from typing import Dict, List, Tuple
 from agents.hisa import HiSA
 import traceback
 from utils import build_additional_contexts, summary, save_args_to_settings, setup_logger
-from tqdm import tqdm
 
 def config() -> argparse.Namespace:
     from desktop_env.desktop_env import DesktopEnv
@@ -239,7 +238,7 @@ def run(args, logger=None, tasks=None):
         if not tasks:
             logger.info("No tasks to process.")
         else:
-            for domain, task_id in tqdm(tasks, desc="Processing tasks"):
+            for domain, task_id in tasks:
                 # Prepare task directory and config
                 target_dir = os.path.join(args.result_dir, f"{domain}/{task_id}")
                 cfg_path = os.path.join(args.test_config_base_dir, f"{domain}/{task_id}/{task_id}.json")

@@ -19,6 +19,8 @@ from io import BytesIO
 from utils import smart_resize
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", None)
+LOCAL_API_KEY = ""
+LOCAL_API_URL = "http://127.0.0.1"
 
 # Fix numpy import issue in CUDA environment
 os.environ["NUMPY_EXPERIMENTAL_ARRAY_FUNCTION"] = "0"
@@ -100,6 +102,7 @@ MODEL_CONFIGS = {
     "computer-use-preview": ModelConfig("OpenAIAPI", "computer-use-preview", 3, 12),
     "uitars-1.5-7b": ModelConfig("LocalLLM", "uitars-1.5-7b", 0, 0),
     "gta1-7b": ModelConfig("LocalLLM", "gta1-7b", 0, 0),
+    "qwen3.5-9b": ModelConfig("LocalLLM", "qwen3.5-9b", 0, 0),
 }
 
 
@@ -220,7 +223,7 @@ class BaseLLMClient:
         """
         return self.message_formatter.format_for_api(messages)
     
-    def __call__(self, messages: list) -> str:
+    def __call__(self, messages: list, enable_thinking: bool = False) -> str:
         """Send messages and return response"""
         raise NotImplementedError
     
@@ -358,7 +361,7 @@ class OpenAIAPI(BaseLLMClient):
         # Store if this is computer-use-preview model
         self.model_name = model_name
     
-    def __call__(self, messages: list) -> str:
+    def __call__(self, messages: list, enable_thinking: bool = False) -> str:
         response = self.client.responses.create(
             model=self.model_name,
             input=messages,
@@ -595,13 +598,16 @@ class LocalLLM(BaseLLMClient):
 
     def __init__(self, model_name: str, temperature: float = 0, max_tokens: int = 4096):
         super().__init__(model_name, temperature, max_tokens)
-        if model_name == "gta1-7b":
-            base_url = 'http://localhost:1234/v1'
-        elif model_name == "uitars-1.5-7b":
-            base_url = 'http://localhost:1235/v1'
+        normalized_model_name = model_name.lower()
+        if normalized_model_name == "gta1-7b":
+            base_url = LOCAL_API_URL + ':1234/v1'
+        elif normalized_model_name == "uitars-1.5-7b":
+            base_url = LOCAL_API_URL + ':1235/v1'
+        elif normalized_model_name == "qwen3.5-9b":
+            base_url = LOCAL_API_URL + ':30000/v1'
         else:
             raise Exception("model not support")
-        api_key = os.getenv('UITARS_API_KEY', 'empty')
+        api_key = LOCAL_API_KEY or os.getenv('UITARS_API_KEY', 'empty')
         self.client = OpenAI(base_url=base_url, api_key=api_key)
 
         # For uitars-1.5-7b, use OpenAI-compatible local server
@@ -625,10 +631,24 @@ class LocalLLM(BaseLLMClient):
             self.min_pixels = 100 * 28 * 28
             self.image_factor = 28  # patch_size * merge_size = 14 * 2
             self.max_ratio = 200
+        elif "qwen3.5" in model_name.lower():
+            self.model_type = "qwen3.5"
         else:
             raise ValueError(f"Local model {model_name} not supported yet")
 
-    def __call__(self, messages: list) -> str:
+    @staticmethod
+    def _strip_thinking_content(text: str, enable_thinking: bool = True) -> str:
+        """Drop the reasoning block only when thinking mode is enabled."""
+        if not text:
+            return text
+        if not enable_thinking:
+            return text.strip()
+        think_end = text.rfind("</think>")
+        if think_end == -1:
+            return text.strip()
+        return text[think_end + len("</think>"):].strip()
+
+    def __call__(self, messages: list, enable_thinking: bool = False) -> str:
         """
         Call local model with messages
         For uitars and gta1, this returns the raw model response
@@ -670,6 +690,30 @@ class LocalLLM(BaseLLMClient):
             self.usage_stats.image_count += count_images_in_messages(messages)
 
             return response.choices[0].message.content.strip()
+        elif self.model_type == "qwen3.5":
+            formatted_messages = self._format_messages_for_uitars(messages)
+
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=formatted_messages,
+                temperature=self.temperature,
+                top_p=0.95,
+                presence_penalty=1.5,
+                extra_body={
+                    "top_k": 20,
+                    "chat_template_kwargs": {"enable_thinking": enable_thinking},
+                },
+            )
+
+            if hasattr(response, 'usage') and response.usage:
+                self.usage_stats.prompt_tokens += getattr(response.usage, 'prompt_tokens', 0)
+                self.usage_stats.completion_tokens += getattr(response.usage, 'completion_tokens', 0)
+            self.usage_stats.image_count += count_images_in_messages(messages)
+
+            return self._strip_thinking_content(
+                response.choices[0].message.content,
+                enable_thinking=enable_thinking,
+            )
         else:
             raise NotImplementedError(f"Model type {self.model_type} not implemented")
 
@@ -810,7 +854,7 @@ class LocalLLM(BaseLLMClient):
         if self.model_type == "uitars":
             return self._parse_uitars_response(raw_response, messages, screen_width, screen_height)
         elif self.model_type == "gta1":
-            return self._parse_gta1_response(raw_response, messages, screen_width, screen_height)
+            return self._parse_gta1_response(raw_response, messages)
         else:
             raise NotImplementedError(f"CUA parsing for model type {self.model_type} not implemented")
 
@@ -1284,8 +1328,6 @@ class LocalLLM(BaseLLMClient):
         self,
         raw_response: str,
         messages: list,
-        screen_width: int,
-        screen_height: int
     ) -> Tuple[str, str]:
         """
         Parse GTA1 raw response to pyautogui code
@@ -1355,7 +1397,7 @@ class AbstractLLM:
         self.logger = logger
         self.client.logger = logger
     
-    def __call__(self, messages: list, max_retries: int = 1) -> Optional[str]:
+    def __call__(self, messages: list, max_retries: int = 1, enable_thinking: bool = False) -> Optional[str]:
         """
         Call LLM with timeout and retry mechanism
         Messages are automatically formatted for the specific API platform
@@ -1372,7 +1414,7 @@ class AbstractLLM:
                 @with_timeout(self.timeout_seconds)
                 def call_llm():
                     # The client will automatically format messages using its formatter
-                    return self.client(messages)
+                    return self.client(messages, enable_thinking=enable_thinking)
                 
                 response = call_llm()
                 return response

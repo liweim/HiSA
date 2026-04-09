@@ -3,7 +3,7 @@ import os
 import platform
 import subprocess
 import time
-import traceback
+
 from desktop_env.providers.base import Provider
 
 logger = logging.getLogger("desktopenv.providers.vmware.VMwareProvider")
@@ -18,7 +18,7 @@ def get_vmrun_type(return_list=False):
             return ['-T', 'ws']
         else:
             return '-T ws'
-    elif platform.system() == 'Darwin':  # Darwin is the system name for macOS
+    elif platform.system() == 'Darwin':
         if return_list:
             return ['-T', 'fusion']
         else:
@@ -41,7 +41,9 @@ class VMwareProvider(Provider):
                     check=False
                 )
                 if result.returncode != 0:
-                    logger.warning(f"Command {' '.join(command)} returned non-zero status: {result.returncode}")
+                    logger.warning(
+                        f"Command {' '.join(command)} returned non-zero status: {result.returncode}"
+                    )
                     logger.debug(f"Error output: {result.stderr}")
                 return result.stdout.strip()
             else:
@@ -54,7 +56,9 @@ class VMwareProvider(Provider):
                     check=False
                 )
                 if result.returncode != 0:
-                    logger.warning(f"Command {' '.join(command)} returned non-zero status: {result.returncode}")
+                    logger.warning(
+                        f"Command {' '.join(command)} returned non-zero status: {result.returncode}"
+                    )
                     logger.debug(f"Error output: {result.stderr}")
                 return None
         except Exception as e:
@@ -66,68 +70,66 @@ class VMwareProvider(Provider):
 
         max_retries = 5
         retry_count = 0
-        retry_delay = 2  
+        retry_delay = 2
 
         while True:
             try:
-                
-                output = subprocess.check_output(f"vmrun {get_vmrun_type()} list", shell=True, stderr=subprocess.STDOUT)
-                output = output.decode('utf-8')
-                output = output.splitlines()
+                output = subprocess.check_output(
+                    f"vmrun {get_vmrun_type()} list",
+                    shell=True,
+                    stderr=subprocess.STDOUT
+                )
+                output = output.decode('utf-8').splitlines()
                 normalized_path_to_vm = os.path.abspath(os.path.normpath(path_to_vm))
 
                 if any(os.path.abspath(os.path.normpath(line)) == normalized_path_to_vm for line in output):
                     logger.info("VM is running.")
                     break
-                else:
-                    _command = ["vmrun"] + get_vmrun_type(return_list=True) + ["start", path_to_vm]
-                    if headless:
-                        _command.append("nogui")
-                    
-                    # Use Popen without capturing output to avoid blocking in headless mode
-                    # This matches the approach used in Spider2-V
-                    logger.info(f"Starting VM with command: {' '.join(_command)}")
-                    p = subprocess.Popen(_command)
-                    p.wait()
-                    
-                    if p.returncode != 0:
-                        # Command failed, but we can't get detailed error since we didn't capture output
-                        # Try to determine if it's a lock issue by attempting again
-                        retry_count += 1
-                        if retry_count >= max_retries:
-                            logger.error(f"Failed to start VM after {max_retries} attempts")
-                            raise Exception(f"Failed to start VM after {max_retries} attempts")
-                        
-                        logger.warning(f"VM start failed (attempt {retry_count}/{max_retries}), possibly due to lock")
-                        logger.info(f"Attempting to clean lock files...")
-                        VMwareProvider._try_clean_lock_files(path_to_vm)
-                        logger.info(f"Waiting {retry_delay} seconds before retrying...")
-                        time.sleep(retry_delay)
-                        
-                        retry_delay = min(retry_delay * 2, 30)
-                        continue
-                    
-                    time.sleep(WAIT_TIME)
+
+                command = ["vmrun"] + get_vmrun_type(return_list=True) + ["start", path_to_vm]
+                if headless:
+                    command.append("nogui")
+
+                logger.info(f"Starting VM with command: {' '.join(command)}")
+                process = subprocess.Popen(command)
+                process.wait()
+
+                if process.returncode != 0:
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        logger.error(f"Failed to start VM after {max_retries} attempts")
+                        raise Exception(f"Failed to start VM after {max_retries} attempts")
+
+                    logger.warning(
+                        f"VM start failed (attempt {retry_count}/{max_retries}), possibly due to lock"
+                    )
+                    logger.info("Attempting to clean lock files...")
+                    self._try_clean_lock_files(path_to_vm)
+                    logger.info(f"Waiting {retry_delay} seconds before retrying...")
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, 30)
+                    continue
+
+                time.sleep(WAIT_TIME)
 
             except subprocess.CalledProcessError as e:
                 error_output = e.output.decode('utf-8').strip() if hasattr(e, 'output') else str(e)
                 logger.error(f"Error executing command: {error_output}")
-                
-                
-                if ("failed to lock the file" in error_output.lower() or 
-                    "another vmware process" in error_output.lower() or
-                    "is in use by another process" in error_output.lower()):
+
+                if (
+                    "failed to lock the file" in error_output.lower()
+                    or "another vmware process" in error_output.lower()
+                    or "is in use by another process" in error_output.lower()
+                ):
                     retry_count += 1
                     if retry_count >= max_retries:
                         logger.error(f"Failed to acquire lock on VM after {max_retries} attempts")
                         raise Exception(f"Failed to start VM after multiple attempts: {error_output}")
-                    
+
                     logger.warning(f"Lock acquisition failed (attempt {retry_count}/{max_retries})")
-                    
                     logger.info("Attempting to clean lock files...")
-                    VMwareProvider._try_clean_lock_files(path_to_vm)
+                    self._try_clean_lock_files(path_to_vm)
                     time.sleep(retry_delay)
-                    
                     retry_delay = min(retry_delay * 2, 30)
                 else:
                     raise
@@ -136,34 +138,33 @@ class VMwareProvider(Provider):
         logger.info("Getting VMware VM IP address...")
         retry_count = 0
         max_retries = 5
-        
+
         while True:
             try:
-                
                 try:
                     vm_status_cmd = ["vmrun"] + get_vmrun_type(return_list=True) + ["list"]
-                    vm_list_output = subprocess.check_output(vm_status_cmd, stderr=subprocess.STDOUT).decode('utf-8')
+                    vm_list_output = subprocess.check_output(
+                        vm_status_cmd,
+                        stderr=subprocess.STDOUT
+                    ).decode('utf-8')
                     normalized_path_to_vm = os.path.abspath(os.path.normpath(path_to_vm))
-                    
+
                     if normalized_path_to_vm not in vm_list_output:
                         if retry_count < max_retries:
                             logger.warning(f"VM is not powered on: {path_to_vm}. Attempting to start...")
                             self.start_emulator(path_to_vm, headless=True, os_type="Ubuntu")
                             retry_count += 1
-                            time.sleep(WAIT_TIME * 2)  
+                            time.sleep(WAIT_TIME * 2)
                             continue
-                        else:
-                            raise Exception(f"Failed to start VM after {max_retries} attempts: {path_to_vm}")
+                        raise Exception(f"Failed to start VM after {max_retries} attempts: {path_to_vm}")
                 except Exception as e:
                     logger.error(f"Error checking VM status: {str(e)}")
                     if retry_count < max_retries:
                         retry_count += 1
                         time.sleep(WAIT_TIME)
                         continue
-                    else:
-                        raise Exception(f"Error checking VM status after {max_retries} attempts: {str(e)}")
-                
-                
+                    raise Exception(f"Error checking VM status after {max_retries} attempts: {str(e)}")
+
                 output = VMwareProvider._execute_command(
                     ["vmrun"] + get_vmrun_type(return_list=True) + ["getGuestIPAddress", path_to_vm, "-wait"],
                     return_output=True
@@ -175,7 +176,9 @@ class VMwareProvider(Provider):
                 if retry_count < max_retries:
                     retry_count += 1
                     time.sleep(WAIT_TIME)
-                    logger.info(f"Retrying to get VMware VM IP address... (Attempt {retry_count}/{max_retries})")
+                    logger.info(
+                        f"Retrying to get VMware VM IP address... (Attempt {retry_count}/{max_retries})"
+                    )
                 else:
                     logger.error(f"Failed to get VM IP address after {max_retries} attempts")
                     raise
@@ -183,39 +186,43 @@ class VMwareProvider(Provider):
     def save_state(self, path_to_vm: str, snapshot_name: str):
         logger.info("Saving VMware VM state...")
         VMwareProvider._execute_command(
-            ["vmrun"] + get_vmrun_type(return_list=True) + ["snapshot", path_to_vm, snapshot_name])
-        time.sleep(WAIT_TIME)  # Wait for the VM to save
+            ["vmrun"] + get_vmrun_type(return_list=True) + ["snapshot", path_to_vm, snapshot_name]
+        )
+        time.sleep(WAIT_TIME)
 
     def revert_to_snapshot(self, path_to_vm: str, snapshot_name: str):
         logger.info(f"Reverting VMware VM to snapshot: {snapshot_name}...")
         VMwareProvider._execute_command(
-            ["vmrun"] + get_vmrun_type(return_list=True) + ["revertToSnapshot", path_to_vm, snapshot_name])
-        time.sleep(WAIT_TIME)  # Wait for the VM to revert
+            ["vmrun"] + get_vmrun_type(return_list=True) + ["revertToSnapshot", path_to_vm, snapshot_name]
+        )
+        time.sleep(WAIT_TIME)
         return path_to_vm
 
-    def stop_emulator(self, path_to_vm: str):
+    def stop_emulator(self, path_to_vm: str, region=None, *args, **kwargs):
         logger.info("Stopping VMware VM...")
         try:
-            # Try to shutdown VM normally
-            VMwareProvider._execute_command(["vmrun"] + get_vmrun_type(return_list=True) + ["stop", path_to_vm])
-            time.sleep(WAIT_TIME)  # Wait for VM to stop
+            VMwareProvider._execute_command(
+                ["vmrun"] + get_vmrun_type(return_list=True) + ["stop", path_to_vm]
+            )
+            time.sleep(WAIT_TIME)
 
-            # Check if the VM has actually stopped
-            output = subprocess.check_output(f"vmrun {get_vmrun_type()} list", shell=True, stderr=subprocess.STDOUT)
-            output = output.decode('utf-8')
-            output = output.splitlines()
+            output = subprocess.check_output(
+                f"vmrun {get_vmrun_type()} list",
+                shell=True,
+                stderr=subprocess.STDOUT
+            )
+            output = output.decode('utf-8').splitlines()
             normalized_path_to_vm = os.path.abspath(os.path.normpath(path_to_vm))
 
-            # If VM is still running, try to force power off
             if any(os.path.abspath(os.path.normpath(line)) == normalized_path_to_vm for line in output):
                 logger.warning("VM still running after stop command. Trying to power off...")
-                VMwareProvider._execute_command(["vmrun"] + get_vmrun_type(return_list=True) + ["poweroff", path_to_vm, "hard"])
+                VMwareProvider._execute_command(
+                    ["vmrun"] + get_vmrun_type(return_list=True) + ["poweroff", path_to_vm, "hard"]
+                )
                 time.sleep(WAIT_TIME)
-            
-            # Try to clean up lock files
+
             if not VMwareProvider._try_clean_lock_files(path_to_vm):
                 logger.warning("Failed to clean lock files")
-                
         except Exception as e:
             logger.error(f"Error stopping VM: {str(e)}")
 
@@ -226,12 +233,12 @@ class VMwareProvider(Provider):
             if not os.path.exists(vm_directory):
                 logger.warning(f"VM directory does not exist: {vm_directory}")
                 return False
-                
+
             lock_files = [f for f in os.listdir(vm_directory) if f.endswith('.lck')]
             if not lock_files:
                 logger.info("No lock files found to clean")
                 return True
-                
+
             logger.info(f"Found {len(lock_files)} lock files to clean")
             for lock_file in lock_files:
                 lock_path = os.path.join(vm_directory, lock_file)
@@ -256,7 +263,7 @@ class VMwareProvider(Provider):
                         os.remove(lock_path)
                     except Exception as e:
                         logger.warning(f"Failed to remove lock file {lock_path}: {str(e)}")
-            
+
             logger.info("Lock files cleaned successfully")
             return True
         except Exception as e:

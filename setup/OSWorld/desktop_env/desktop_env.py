@@ -4,17 +4,16 @@ import logging
 import os
 import time
 import re
+import requests
 from typing import Callable, Any, Optional, Tuple
 from typing import List, Dict, Union
 
 import gymnasium as gym
-import platform
-import subprocess
+
 from desktop_env.controllers.python import PythonController
 from desktop_env.controllers.setup import SetupController
 from desktop_env.evaluators import metrics, getters
 from desktop_env.providers import create_vm_manager_and_provider
-
 
 logger = logging.getLogger("desktopenv.env")
 
@@ -172,7 +171,7 @@ class DesktopEnv(gym.Env):
             self.path_to_vm = os.path.abspath(os.path.expandvars(os.path.expanduser(path_to_vm))) \
                 if provider_name in {"vmware", "virtualbox"} else path_to_vm
         else:
-            self.path_to_vm = self.manager.get_vm_path(os_type=self.os_type, region=region)
+            self.path_to_vm = self.manager.get_vm_path(os_type=self.os_type, region=region, screen_size=(self.screen_width, self.screen_height))
         
         self.snapshot_name = snapshot_name
         self.cache_dir_base: str = cache_dir
@@ -237,6 +236,19 @@ class DesktopEnv(gym.Env):
         # Save the current virtual machine state to a certain snapshot name
         self.provider.save_state(self.path_to_vm, snapshot_name)
 
+    def _is_server_ready(self) -> bool:
+        if not getattr(self, "vm_ip", None) or not getattr(self, "server_port", None):
+            return False
+
+        try:
+            response = requests.get(
+                f"http://{self.vm_ip}:{self.server_port}/terminal",
+                timeout=5,
+            )
+            return response.ok
+        except Exception:
+            return False
+
     def close(self):
         # Close (release) the virtual machine
         self.provider.stop_emulator(self.path_to_vm)
@@ -276,24 +288,21 @@ class DesktopEnv(gym.Env):
                 self.is_environment_used = False
             else:
                 logger.info("Environment is clean, skipping snapshot revert (provider: {}).".format(self.provider_name))
+                if not self._is_server_ready():
+                    logger.warning(
+                        "Environment was marked clean but the desktop server is unreachable. Restarting emulator..."
+                    )
+                    try:
+                        self.provider.stop_emulator(self.path_to_vm)
+                    except Exception as stop_err:
+                        logger.warning(f"Best-effort stop before restart failed: {stop_err}")
+                    self._start_emulator()
+                    logger.info("Emulator restarted after failed readiness check.")
 
             if task_config is not None:
                 if task_config.get("proxy", False) and self.enable_proxy:
                     # If using proxy and proxy is enabled, set up the proxy configuration
                     self.setup_controller._proxy_setup(self.client_password)
-                
-                # Set screen resolution after VM is up
-                try:
-                    logger.info(f"Setting screen resolution to {self.screen_width}x{self.screen_height} ...")
-                    self.setup_controller._set_resolution_setup(
-                        width=self.screen_width,
-                        height=self.screen_height,
-                        method="auto"
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to set screen resolution automatically: {e}")
-                    logger.warning("You may need to set the resolution manually in the VM")
-                
                 self._set_task_info(task_config)
                 self.setup_controller.reset_cache_dir(self.cache_dir)
                 logger.info("Setting up environment...")
@@ -314,7 +323,6 @@ class DesktopEnv(gym.Env):
                 break
             
         logger.info("Environment setup complete.")
-        time.sleep(30)
 
         observation = self._get_obs()
         return observation
@@ -332,6 +340,10 @@ class DesktopEnv(gym.Env):
     @property
     def vm_platform(self):
         return self.controller.get_vm_platform()
+
+    @property
+    def vm_machine(self):
+        return self.controller.get_vm_machine()
 
     @property
     def vm_screen_size(self):
@@ -407,12 +419,12 @@ class DesktopEnv(gym.Env):
         logger.info(f"Step {self._step_no} in trajectory {self._traj_no} with action: {action}")
         # handle the special actions
         if action in ['WAIT', 'FAIL', 'DONE'] or (type(action) == dict and action['action_type'] in ['WAIT', 'FAIL', 'DONE']):
-            if action == 'WAIT':
+            if action == 'WAIT' or (type(action) == dict and action.get('action_type') == 'WAIT'):
                 time.sleep(pause)
-            elif action == 'FAIL':
+            elif action == 'FAIL' or (type(action) == dict and action.get('action_type') == 'FAIL'):
                 done = True
                 info = {"fail": True}
-            elif action == 'DONE':
+            elif action == 'DONE' or (type(action) == dict and action.get('action_type') == 'DONE'):
                 done = True
                 info = {"done": True}
 
@@ -420,7 +432,7 @@ class DesktopEnv(gym.Env):
             # the set of all possible actions defined in the action representation
             self.controller.execute_action(action)
         elif self.action_space == "pyautogui" or self.action_space == "claude_computer_use":
-            if action in ['WAIT', 'FAIL', 'DONE']:
+            if action in ['WAIT', 'FAIL', 'DONE'] or (type(action) == dict and action.get('action_type') in ['WAIT', 'FAIL', 'DONE']):
                 self.controller.execute_action(action)
             else:
                 # the set of all possible python commands insides `pyautogui`
@@ -450,13 +462,16 @@ class DesktopEnv(gym.Env):
             self.is_environment_used = True
 
         if self.evaluator['func'] == "infeasible":
-            if len(self.action_history) > 0 and self.action_history[-1] == "FAIL":
-                return 1
-            else:
-                return 0
+            if len(self.action_history) > 0:
+                last_action = self.action_history[-1]
+                if last_action == "FAIL" or (type(last_action) == dict and last_action.get('action_type') == 'FAIL'):
+                    return 1
+            return 0
         else:
-            if len(self.action_history) > 0 and self.action_history[-1] == "FAIL":
-                return 0
+            if len(self.action_history) > 0:
+                last_action = self.action_history[-1]
+                if last_action == "FAIL" or (type(last_action) == dict and last_action.get('action_type') == 'FAIL'):
+                    return 0
 
         if type(self.metric) == list:
             # Multiple metrics to evaluate whether the task is successfully completed
@@ -508,66 +523,3 @@ class DesktopEnv(gym.Env):
             return self.controller.get_screenshot()
         else:
             raise ValueError('Unsupported render mode: {}'.format(mode))
-    
-    def clean_lock(self, vmdir):
-        try:
-            # Try to terminate remaining VMware processes
-            if platform.system() == 'Windows':
-                # Force terminate VMware processes on Windows
-                subprocess.run(['taskkill', '/F', '/IM', 'vmware.exe', '/T'], 
-                              stdout=subprocess.DEVNULL, 
-                              stderr=subprocess.DEVNULL)
-                subprocess.run(['taskkill', '/F', '/IM', 'vmware-vmx.exe', '/T'], 
-                              stdout=subprocess.DEVNULL, 
-                              stderr=subprocess.DEVNULL)
-            elif platform.system() == 'Linux' or platform.system() == 'Darwin':
-                # Force terminate VMware processes on Linux/macOS
-                subprocess.run(['pkill', '-f', 'vmware'], 
-                              stdout=subprocess.DEVNULL, 
-                              stderr=subprocess.DEVNULL)
-                subprocess.run(['pkill', '-f', 'vmware-vmx'], 
-                              stdout=subprocess.DEVNULL, 
-                              stderr=subprocess.DEVNULL)
-            
-            # Find and delete lock files
-            if os.path.exists(vmdir):
-                for root, dirs, files in os.walk(vmdir):
-                    for item in dirs + files:
-                        if item.endswith('.lck'):
-                            full_path = os.path.join(root, item)
-                            try:
-                                if os.path.isdir(full_path):
-                                    import shutil
-                                    shutil.rmtree(full_path)
-                                else:
-                                    os.remove(full_path)
-                                logger.info(f"Cleaned lock file: {full_path}")
-                            except Exception as e:
-                                logger.warning(f"Failed to clean lock file: {full_path}, error: {str(e)}")
-            
-            # Check and update .vmware_vms file, ensure all VMs are marked as free
-            registry_path = '.vmware_vms'
-            if os.path.exists(registry_path):
-                try:
-                    with open(registry_path, 'r') as file:
-                        lines = file.readlines()
-                    
-                    new_lines = []
-                    for line in lines:
-                        parts = line.strip().split('|')
-                        if len(parts) == 2:
-                            vm_path, status = parts
-                            if status != 'free':
-                                new_lines.append(f'{vm_path}|free\n')
-                            else:
-                                new_lines.append(line)
-                        else:
-                            new_lines.append(line)
-                    
-                    with open(registry_path, 'w') as file:
-                        file.writelines(new_lines)
-                except Exception as e:
-                    logger.warning(f"Failed to update VM status: {str(e)}")
-                    
-        except Exception as cleanup_error:
-            logger.error(f"Error during resource cleanup: {str(cleanup_error)}")

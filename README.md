@@ -157,11 +157,10 @@ The setup script already copies modifications from `setup/OSWorld/` to `benchmar
 
 | File | Modification Scope |
 | --- | --- |
-| **desktop_env/controllers/setup.py** | Implements robust resolution switching logic via xrandr or GNOME and optimizes file operation timeouts to prevent system hangs. |
-| **desktop_env/desktop_env.py** | Integrates automated resolution configuration during the setup phase and adds lock file cleanup to ensure VM availability. |
-| **desktop_env/providers/vmware/manager.py** | Optimizes VM allocation to reduce lock contention and implements robust cleanup protocols for stale processes and lock files. |
-| **desktop_env/providers/vmware/provider.py** | Enhances emulator lifecycle management with retry logic and forced termination capabilities to handle unresponsive instances. |
-| **desktop_env/server/main.py** | Disables specific event logging within the bash script execution flow to prevent runtime errors. |
+| **desktop_env/controllers/setup.py** | Stabilizes setup-side file and auth configuration handling, including reliable path resolution for settings-based integrations. |
+| **desktop_env/desktop_env.py** | Adds environment readiness checks during reset so a supposedly clean environment is restarted if the desktop server is actually unreachable. |
+| **desktop_env/providers/vmware/provider.py** | Hardens the VMware lifecycle with startup retries, lock-file cleanup, IP acquisition recovery, and hard poweroff fallback for stuck instances. |
+| **desktop_env/server/main.py** | Provides the command execution and verification endpoints required by the setup/controller pipeline. |
 
 You need to configure a specific snapshot for HiSA. Launch the virtual machine by opening the configuration file at `OSWorld/vmware_vm_data/Ubuntu0/Ubuntu0.vmx` and replace the content of `/home/user/server/main.py` inside the virtual machine with the updated code located at `setup/OSWorld/desktop_env/server/main.py`. The original main.py raises an exception during bash code execution, the updated one resolves this. Open the terminal and execute the restart command using `password` as the sudo password.
 ```bash

@@ -1,10 +1,13 @@
 import ctypes
+from io import BytesIO
 import os
 import platform
 import shlex
 import json
+import shutil
 import subprocess, signal
 import time
+import tempfile
 from pathlib import Path
 from typing import Any, Optional, Sequence
 from typing import List, Dict, Tuple, Literal
@@ -71,6 +74,30 @@ TIMEOUT = 1800  # seconds
 logger = app.logger
 recording_process = None  # fixme: this is a temporary solution for recording, need to be changed to support multiple-process
 recording_path = "/tmp/recording.mp4"
+
+OFFICE_FILE_EXTENSIONS = {
+    ".doc", ".docx", ".odt", ".rtf",
+    ".xls", ".xlsx", ".ods", ".csv",
+    ".ppt", ".pptx", ".odp",
+}
+
+def _append_event(*_args, **_kwargs):
+    # No-op placeholder to avoid NameError when trajectory logging is enabled.
+    return None
+
+
+def _is_office_document(path_obj: Path) -> bool:
+    return path_obj.suffix.lower() in OFFICE_FILE_EXTENSIONS
+
+
+def _get_linux_open_command(path_obj: Path) -> List[str]:
+    if _is_office_document(path_obj) and shutil.which("libreoffice"):
+        return ["libreoffice", str(path_obj)]
+    if shutil.which("xdg-open"):
+        return ["xdg-open", str(path_obj)]
+    if shutil.which("gio"):
+        return ["gio", "open", str(path_obj)]
+    raise FileNotFoundError("No supported Linux file opener found (tried libreoffice, xdg-open, gio).")
 
 
 @app.route('/setup/execute', methods=['POST'])
@@ -263,74 +290,89 @@ def launch_app():
 @app.route('/screenshot', methods=['GET'])
 def capture_screen_with_cursor():
     # fixme: when running on virtual machines, the cursor is not captured, don't know why
-
-    file_path = os.path.join(os.path.dirname(__file__), "screenshots", "screenshot.png")
     user_platform = platform.system()
 
-    # Ensure the screenshots directory exists
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    try:
+        screenshot_image = None
+        # fixme: This is a temporary fix for the cursor not being captured on Windows and Linux
+        if user_platform == "Windows":
+            def get_cursor():
+                hcursor = win32gui.GetCursorInfo()[1]
+                hdc = win32ui.CreateDCFromHandle(win32gui.GetDC(0))
+                hbmp = win32ui.CreateBitmap()
+                hbmp.CreateCompatibleBitmap(hdc, 36, 36)
+                hdc = hdc.CreateCompatibleDC()
+                hdc.SelectObject(hbmp)
+                hdc.DrawIcon((0,0), hcursor)
 
-    # fixme: This is a temporary fix for the cursor not being captured on Windows and Linux
-    if user_platform == "Windows":
-        def get_cursor():
-            hcursor = win32gui.GetCursorInfo()[1]
-            hdc = win32ui.CreateDCFromHandle(win32gui.GetDC(0))
-            hbmp = win32ui.CreateBitmap()
-            hbmp.CreateCompatibleBitmap(hdc, 36, 36)
-            hdc = hdc.CreateCompatibleDC()
-            hdc.SelectObject(hbmp)
-            hdc.DrawIcon((0,0), hcursor)
+                bmpinfo = hbmp.GetInfo()
+                bmpstr = hbmp.GetBitmapBits(True)
+                cursor = Image.frombuffer('RGB', (bmpinfo['bmWidth'], bmpinfo['bmHeight']), bmpstr, 'raw', 'BGRX', 0, 1).convert("RGBA")
 
-            bmpinfo = hbmp.GetInfo()
-            bmpstr = hbmp.GetBitmapBits(True)
-            cursor = Image.frombuffer('RGB', (bmpinfo['bmWidth'], bmpinfo['bmHeight']), bmpstr, 'raw', 'BGRX', 0, 1).convert("RGBA")
+                win32gui.DestroyIcon(hcursor)
+                win32gui.DeleteObject(hbmp.GetHandle())
+                hdc.DeleteDC()
 
-            win32gui.DestroyIcon(hcursor)
-            win32gui.DeleteObject(hbmp.GetHandle())
-            hdc.DeleteDC()
+                pixdata = cursor.load()
 
-            pixdata = cursor.load()
+                width, height = cursor.size
+                for y in range(height):
+                    for x in range(width):
+                        if pixdata[x, y] == (0, 0, 0, 255):
+                            pixdata[x, y] = (0, 0, 0, 0)
 
-            width, height = cursor.size
-            for y in range(height):
-                for x in range(width):
-                    if pixdata[x, y] == (0, 0, 0, 255):
-                        pixdata[x, y] = (0, 0, 0, 0)
+                hotspot = win32gui.GetIconInfo(hcursor)[1:3]
 
-            hotspot = win32gui.GetIconInfo(hcursor)[1:3]
+                return (cursor, hotspot)
 
-            return (cursor, hotspot)
+            ratio = ctypes.windll.shcore.GetScaleFactorForDevice(0) / 100
 
-        ratio = ctypes.windll.shcore.GetScaleFactorForDevice(0) / 100
+            img = ImageGrab.grab(bbox=None, include_layered_windows=True)
 
-        img = ImageGrab.grab(bbox=None, include_layered_windows=True)
+            try:
+                cursor, (hotspotx, hotspoty) = get_cursor()
 
-        try:
-            cursor, (hotspotx, hotspoty) = get_cursor()
+                pos_win = win32gui.GetCursorPos()
+                pos = (round(pos_win[0]*ratio - hotspotx), round(pos_win[1]*ratio - hotspoty))
 
-            pos_win = win32gui.GetCursorPos()
-            pos = (round(pos_win[0]*ratio - hotspotx), round(pos_win[1]*ratio - hotspoty))
+                img.paste(cursor, pos, cursor)
+            except Exception as e:
+                logger.warning(f"Failed to capture cursor on Windows, screenshot will not have a cursor. Error: {e}")
 
-            img.paste(cursor, pos, cursor)
-        except Exception as e:
-            logger.warning(f"Failed to capture cursor on Windows, screenshot will not have a cursor. Error: {e}")
+            screenshot_image = img
+        elif user_platform == "Linux":
+            # Prefer screenshot with cursor overlay, but degrade gracefully to plain screenshot.
+            try:
+                cursor_obj = Xcursor()
+                imgarray = cursor_obj.getCursorImageArrayFast()
+                cursor_img = Image.fromarray(imgarray)
+                screenshot = pyautogui.screenshot()
+                cursor_x, cursor_y = pyautogui.position()
+                screenshot.paste(cursor_img, (cursor_x, cursor_y), cursor_img)
+                screenshot_image = screenshot
+            except Exception as e:
+                logger.warning(f"Failed to capture cursor on Linux, fallback to plain screenshot. Error: {e}")
+                screenshot_image = pyautogui.screenshot()
+        elif user_platform == "Darwin":  # (Mac OS)
+            # Use the screencapture utility to capture the screen with the cursor
+            with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
+                subprocess.run(["screencapture", "-C", tmp_file.name], check=True)
+                screenshot_image = Image.open(tmp_file.name).copy()
+        else:
+            logger.warning(f"The platform you're using ({user_platform}) is not currently supported")
+            screenshot_image = pyautogui.screenshot()
 
-        img.save(file_path)
-    elif user_platform == "Linux":
-        cursor_obj = Xcursor()
-        imgarray = cursor_obj.getCursorImageArrayFast()
-        cursor_img = Image.fromarray(imgarray)
-        screenshot = pyautogui.screenshot()
-        cursor_x, cursor_y = pyautogui.position()
-        screenshot.paste(cursor_img, (cursor_x, cursor_y), cursor_img)
-        screenshot.save(file_path)
-    elif user_platform == "Darwin":  # (Mac OS)
-        # Use the screencapture utility to capture the screen with the cursor
-        subprocess.run(["screencapture", "-C", file_path])
-    else:
-        logger.warning(f"The platform you're using ({user_platform}) is not currently supported")
+        if screenshot_image is None:
+            raise RuntimeError("Screenshot capture returned no image")
 
-    return send_file(file_path, mimetype='image/png')
+        image_buffer = BytesIO()
+        screenshot_image.save(image_buffer, format='PNG')
+        image_buffer.seek(0)
+        return send_file(image_buffer, mimetype='image/png')
+
+    except Exception as e:
+        logger.exception(f"Failed to capture screenshot: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 def _has_active_terminal(desktop: Accessible) -> bool:
@@ -1298,7 +1340,6 @@ def open_file():
     # If it's not a file path, treat it as an application name/command
     if not is_file_path:
         # Check if it's a valid command by trying to find it in PATH
-        import shutil
         if not shutil.which(path):
             return f"Application/file not found: {path}", 404
 
@@ -1308,8 +1349,14 @@ def open_file():
             if platform.system() == "Windows":
                 os.startfile(path_obj)
             else:
-                open_cmd: str = "open" if platform.system() == "Darwin" else "xdg-open"
-                subprocess.Popen([open_cmd, str(path_obj)])
+                if platform.system() == "Darwin":
+                    open_command = ["open", str(path_obj)]
+                elif platform.system() == "Linux":
+                    open_command = _get_linux_open_command(path_obj)
+                else:
+                    open_command = ["xdg-open", str(path_obj)]
+                logger.info("Opening file %s with command: %s", path_obj, open_command)
+                subprocess.Popen(open_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             file_name = path_obj.name
             file_name_without_ext, _ = os.path.splitext(file_name)
         else:
@@ -1348,8 +1395,11 @@ def open_file():
                     if not result.stdout.strip():
                         pass  # No windows, just continue waiting
                     else:
+                        linux_window_markers = [file_name, file_name_without_ext]
+                        if is_file_path and _is_office_document(path_obj):
+                            linux_window_markers.extend(["LibreOffice", "soffice"])
                         for window in window_list:
-                            if file_name in window or file_name_without_ext in window:
+                            if any(marker in window for marker in linux_window_markers):
                                 # a window is found, now activate it
                                 window_id = window.split()[0]
                                 subprocess.run(['wmctrl', '-i', '-a', window_id], check=True)
@@ -1370,7 +1420,7 @@ def open_file():
         if window_found:
             return "File opened and window activated successfully"
         else:
-            return f"Failed to find window for {file_name} within {timeout} seconds.", 500
+            return f"Failed to find window for {file_name} within {TIMEOUT} seconds.", 500
 
     except Exception as e:
         return f"Failed to open {path}. Error: {e}", 500
@@ -1537,9 +1587,17 @@ def start_recording():
 def end_recording():
     global recording_process
 
-    if not recording_process or recording_process.poll() is not None:
-        recording_process = None  # Clean up stale process object
+    if not recording_process:
         return jsonify({'status': 'error', 'message': 'No recording in progress to stop.'}), 400
+    
+    # Check if ffmpeg process has already exited unexpectedly
+    exit_code = recording_process.poll()
+    if exit_code is not None:
+        # Process already terminated, get the error output
+        error_output = recording_process.stderr.read() if recording_process.stderr else "No stderr available"
+        logger.error(f"ffmpeg exited unexpectedly with code {exit_code}. Stderr: {error_output}")
+        recording_process = None
+        return jsonify({'status': 'error', 'message': f'ffmpeg exited unexpectedly with code {exit_code}. Error: {error_output}'}), 500
 
     error_output = ""
     try:
@@ -1657,7 +1715,6 @@ def run_python():
         return jsonify({
             'status': 'error',
             'message': f'Execution error: {str(e)}',
-            'error': traceback.format_exc(),
             'need_more': False,
             'output': None,
         }), 500
@@ -1730,7 +1787,7 @@ def run_bash_script():
                 shell=False
             )
         
-        # # Log the command execution for trajectory recording
+        # Log the command execution for trajectory recording
         # _append_event("BashScript", 
         #               {"script": script, "output": result.stdout, "error": "", "returncode": result.returncode}, 
         #               ts=time.time())

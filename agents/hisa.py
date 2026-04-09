@@ -728,7 +728,7 @@ class HiSA:
             }
         return delta
 
-    def _summarize_history_segment(self, logs: List[Dict], start_step: int, end_step: int, previous_summary: str = "") -> str:
+    def _context_refinement(self, logs: List[Dict], start_step: int, end_step: int, previous_summary: str = "") -> str:
         """Summarize a segment of action logs with context refinement."""
         
         if not logs and not previous_summary:
@@ -1016,7 +1016,7 @@ class HiSA:
                         logs_to_summarize = self.action_logs[self.last_summary_step:]
                         start_step = self.action_logs[0]["step"]
                         end_step = self.action_logs[-1]["step"]
-                        summary = self._summarize_history_segment(
+                        summary = self._context_refinement(
                             logs_to_summarize, start_step, end_step,
                             previous_summary=self.last_full_summary
                         )
@@ -1025,7 +1025,7 @@ class HiSA:
                         logs_to_summarize = self.action_logs
                         start_step = logs_to_summarize[0]["step"]
                         end_step = logs_to_summarize[-1]["step"]
-                        summary = self._summarize_history_segment(logs_to_summarize, start_step, end_step)
+                        summary = self._context_refinement(logs_to_summarize, start_step, end_step)
 
                     self.last_full_summary = summary
                     self.last_summary_step = total_logs
@@ -1326,7 +1326,7 @@ Based on the execution_history and current screenshot, decide the next action. A
             if self.wo_step:
                 step_abstraction = ""
             else:
-                step_abstraction = "Result: " + self._step_abstraction_result(
+                step_abstraction = "Result: " + self._step_abstraction(
                     before_screenshot, after_screenshot, eval_desc,
                     wo_roi=self.wo_roi, roi_margin=self.roi_margin
                 )
@@ -1386,7 +1386,7 @@ Based on the execution_history and current screenshot, decide the next action. A
             else:
                 return f"GUI Action Code: {code}\nStatus: Failed\nError: {str(e)}"
 
-    def _step_abstraction_result(self, before_screenshot: bytes, after_screenshot: bytes,
+    def _step_abstraction(self, before_screenshot: bytes, after_screenshot: bytes,
             action_description: str, wo_roi: bool = False,
             roi_margin: int = 50) -> str:
         """Abstract step by comparing before/after screenshots.
@@ -1504,7 +1504,7 @@ Based on the execution_history and current screenshot, decide the next action. A
                 step_abstraction = ""
             else:
                 bash_description = f"Bash command: {code}\nOutput: {logs}..."  # Truncate long output
-                step_abstraction = "Result: " + self._step_abstraction_result(
+                step_abstraction = "Result: " + self._step_abstraction(
                     before_screenshot, after_screenshot, bash_description,
                     wo_roi=self.wo_roi, roi_margin=self.roi_margin
                 )
@@ -1595,7 +1595,7 @@ Based on the execution_history and current screenshot, decide the next action. A
             if self.wo_step:
                 step_abstraction = ""
             else:
-                step_abstraction = "Result: " + self._step_abstraction_result(
+                step_abstraction = "Result: " + self._step_abstraction(
                     before_screenshot, after_screenshot,
                     f"Waited {wait_seconds} seconds to observe UI changes",
                     wo_roi=self.wo_roi, roi_margin=self.roi_margin

@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import os.path
-import platform
 import shutil
 import sqlite3
 import tempfile
@@ -33,6 +32,7 @@ PROXY_CONFIG_FILE = os.getenv("PROXY_CONFIG_FILE", "evaluation_examples/settings
 logger = logging.getLogger("desktopenv.setup")
 
 FILE_PATH = os.path.dirname(os.path.abspath(__file__))
+OSWORLD_ROOT = os.path.abspath(os.path.join(FILE_PATH, "..", ".."))
 
 init_proxy_pool(PROXY_CONFIG_FILE)  # initialize the global proxy pool
 
@@ -54,6 +54,13 @@ class SetupController:
 
     def reset_cache_dir(self, cache_dir: str):
         self.cache_dir = cache_dir
+
+    def _resolve_osworld_path(self, path: str) -> str:
+        if not path:
+            return path
+        if os.path.isabs(path):
+            return path
+        return os.path.abspath(os.path.join(OSWORLD_ROOT, path))
 
     def setup(self, config: List[Dict[str, Any]], use_proxy: bool = False)-> bool:
         """
@@ -102,7 +109,7 @@ class SetupController:
                 logger.error(f"SETUP FAILED at step {i+1}/{len(config)}: {setup_function}({str(parameters)})")
                 logger.error(f"Error details: {e}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
-                # raise Exception(f"Setup step {i+1} failed: {setup_function} - {e}") from e
+                raise Exception(f"Setup step {i+1} failed: {setup_function} - {e}") from e
         
         return True
 
@@ -291,7 +298,7 @@ class SetupController:
         try:
             # The server-side call is now blocking and can take time.
             # We set a timeout that is slightly longer than the server's timeout (1800s).
-            response = requests.post(self.http_server + "/setup" + "/open_file", headers=headers, data=payload, timeout=60)#1810
+            response = requests.post(self.http_server + "/setup" + "/open_file", headers=headers, data=payload, timeout=1810)
             response.raise_for_status()  # This will raise an exception for 4xx and 5xx status codes
             logger.info("Command executed successfully: %s", response.text)
         except requests.exceptions.RequestException as e:
@@ -457,151 +464,6 @@ class SetupController:
 
     def _sleep_setup(self, seconds: float):
         time.sleep(seconds)
-
-    def _execution_result(self, command: List[str] = [], retries: int = 3) -> Dict[str, Any]:
-        """ Get the execution results of the command.
-        @return:
-            results(Dict[str, Any]): the execution results, including keys
-                status(str): the status of the execution
-                returncode(int): the return code of the execution
-                output(str): the standard output of the execution
-                error(str): the standard error of the execution
-        """
-        nb_failings, results = 0, {"status": "failed", "returncode": 1, "output": "", "error": ""}
-        while nb_failings < retries:
-            try:
-                payload = json.dumps({"command": command, "shell": False})
-                headers = {"Content-Type": "application/json"}
-                response = requests.post(self.http_server + "/execute", headers=headers, data=payload)
-                if response.status_code == 200:
-                    results = response.json()
-                    return results
-                else:
-                    nb_failings += 1
-                    logger.warning(f"[WARNING]: Returned status code is not 200 when sending command {' '.join(command)}. Retrying {nb_failings}...")
-            except requests.exceptions.RequestException as e:
-                logger.warning(f"[WARNING]: An unexpected error {e} occurred when sending command {' '.join(command)}. Retrying {nb_failings}...")
-                nb_failings += 1
-                time.sleep(0.3)
-
-        return results
-
-    def _set_resolution_setup(self, width: int = None, height: int = None, method: str = "auto"):
-        """
-        Set VM screen resolution
-
-        Args:
-            width (int): Target screen width, defaults to self.screen_width
-            height (int): Target screen height, defaults to self.screen_height
-            method (str): Method to use for setting resolution
-                - "auto": Try multiple methods automatically (default)
-                - "xrandr": Use xrandr command (works on most Linux systems)
-                - "gnome": Use GNOME settings (for GNOME desktop)
-        """
-        # Use default screen size if not specified
-        target_width = width if width is not None else self.screen_width
-        target_height = height if height is not None else self.screen_height
-
-        logger.info(f"Setting screen resolution to {target_width}x{target_height} using method: {method}")
-
-        if method == "auto" or method == "xrandr":
-            # Try xrandr first (most common method for Linux)
-            try:
-                # Get current display name
-                result = self._execution_result(command=["bash", "-c", "xrandr | grep ' connected' | awk '{print $1}'"])
-                display_name = result.get("output", "").strip().split('\n')[0] if result.get("output") else None
-
-                if display_name:
-                    logger.info(f"Found display: {display_name}")
-
-                    # Try to set resolution using xrandr
-                    resolution = f"{target_width}x{target_height}"
-
-                    # First, check if the resolution mode exists
-                    check_result = self._execution_result(command=["bash", "-c", f"xrandr | grep '{resolution}'"])
-
-                    if resolution in check_result.get("output", ""):
-                        # Mode exists, just switch to it
-                        logger.info(f"Resolution mode {resolution} exists, switching to it...")
-                        self._execute_setup(
-                            command=["xrandr", "--output", display_name, "--mode", resolution],
-                            shell=False
-                        )
-                        logger.info("Resolution set successfully using xrandr")
-                        return True
-                    else:
-                        # Need to create the mode first
-                        logger.info(f"Creating new resolution mode {resolution}...")
-
-                        # Generate modeline using cvt
-                        cvt_result = self._execution_result(command=["cvt", str(target_width), str(target_height)])
-                        if cvt_result.get("returncode") == 0:
-                            # Parse modeline from cvt output
-                            # Example: Modeline "1920x1080_60.00"  173.00  1920 2048 2248 2576  1080 1083 1088 1120 -hsync +vsync
-                            modeline = None
-                            for line in cvt_result.get("output", "").split('\n'):
-                                if 'Modeline' in line:
-                                    # Extract modeline after "Modeline"
-                                    modeline = line.split('Modeline')[1].strip()
-                                    break
-
-                            if modeline:
-                                # Create new mode
-                                mode_name = f"{target_width}x{target_height}_60.00"
-                                self._execute_setup(
-                                    command=["bash", "-c", f"xrandr --newmode {modeline}"],
-                                    shell=False
-                                )
-
-                                # Add mode to display
-                                self._execute_setup(
-                                    command=["xrandr", "--addmode", display_name, mode_name],
-                                    shell=False
-                                )
-
-                                # Switch to the new mode
-                                self._execute_setup(
-                                    command=["xrandr", "--output", display_name, "--mode", mode_name],
-                                    shell=False
-                                )
-
-                                logger.info("Resolution set successfully using xrandr with custom mode")
-                                return True
-
-                if method == "xrandr":
-                    logger.error("Failed to set resolution using xrandr")
-                    return False
-
-            except Exception as e:
-                logger.warning(f"xrandr method failed: {e}")
-                if method == "xrandr":
-                    raise
-
-        if method == "auto" or method == "gnome":
-            # Try GNOME settings as fallback
-            try:
-                logger.info("Trying GNOME settings method...")
-                resolution = f"{target_width}x{target_height}"
-
-                # Use gsettings to set resolution (for GNOME)
-                # Note: This may not work on all systems
-                self._execute_setup(
-                    command=["bash", "-c",
-                            f"gsettings set org.gnome.desktop.screensaver lock-enabled false && "
-                            f"xrandr --output $(xrandr | grep ' connected' | awk '{{print $1}}' | head -1) --mode {resolution}"],
-                    shell=False
-                )
-
-                logger.info("Resolution set successfully using GNOME settings")
-                return True
-
-            except Exception as e:
-                logger.warning(f"GNOME settings method failed: {e}")
-                if method == "gnome":
-                    raise
-
-        logger.error(f"Failed to set resolution to {target_width}x{target_height}")
-        return False
 
     def _act_setup(self, action_seq: List[Union[Dict[str, Any], str]]):
         # TODO
@@ -831,7 +693,9 @@ class SetupController:
                     path(str): remote url to download file
                     dest(List[str]): the path in the google drive to store the downloaded file
         """
-        settings_file = config.get('settings_file', 'evaluation_examples/settings/googledrive/settings.yml')
+        settings_file = self._resolve_osworld_path(
+            config.get('settings_file', 'evaluation_examples/settings/googledrive/settings.yml')
+        )
         gauth = GoogleAuth(settings_file=settings_file)
         drive = GoogleDrive(gauth)
 
@@ -936,7 +800,8 @@ class SetupController:
                 except:
                     logger.warning("Opening %s exceeds time limit", url)  # only for human test
                 logger.info(f"Opened new page: {url}")
-                settings = json.load(open(config['settings_file']))
+                settings_file = self._resolve_osworld_path(config['settings_file'])
+                settings = json.load(open(settings_file))
                 email, password = settings['email'], settings['password']
 
                 try:
@@ -958,7 +823,7 @@ class SetupController:
 
     def _update_browse_history_setup(self, **config):
         cache_path = os.path.join(self.cache_dir, "history_new.sqlite")
-        db_url = "https://drive.usercontent.google.com/u/0/uc?id=1Lv74QkJYDWVX0RIgg0Co-DUcoYpVL0oX&export=download" # google drive
+        db_url = "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/chrome/44ee5668-ecd5-4366-a6ce-c1c9b8d4e938/history_empty.sqlite?download=true"
         if not os.path.exists(cache_path):
             max_retries = 3
             downloaded = False
@@ -984,80 +849,83 @@ class SetupController:
         else:
             logger.info("File already exists in cache directory")
         # copy a new history file in the tmp folder
-        db_path = cache_path
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = os.path.join(tmp_dir, "history_empty.sqlite")
+            shutil.copy(cache_path, db_path)
 
-        history = config['history']
+            history = config['history']
 
-        for history_item in history:
-            url = history_item['url']
-            title = history_item['title']
-            visit_time = datetime.now() - timedelta(seconds=history_item['visit_time_from_now_in_seconds'])
+            for history_item in history:
+                url = history_item['url']
+                title = history_item['title']
+                visit_time = datetime.now() - timedelta(seconds=history_item['visit_time_from_now_in_seconds'])
 
-            # Chrome use ms from 1601-01-01 as timestamp
-            epoch_start = datetime(1601, 1, 1)
-            chrome_timestamp = int((visit_time - epoch_start).total_seconds() * 1000000)
+                # Chrome use ms from 1601-01-01 as timestamp
+                epoch_start = datetime(1601, 1, 1)
+                chrome_timestamp = int((visit_time - epoch_start).total_seconds() * 1000000)
 
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
 
-            cursor.execute('''
-                   INSERT INTO urls (url, title, visit_count, typed_count, last_visit_time, hidden)
-                   VALUES (?, ?, ?, ?, ?, ?)
-               ''', (url, title, 1, 0, chrome_timestamp, 0))
+                cursor.execute('''
+                    INSERT INTO urls (url, title, visit_count, typed_count, last_visit_time, hidden)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (url, title, 1, 0, chrome_timestamp, 0))
 
-            url_id = cursor.lastrowid
+                url_id = cursor.lastrowid
 
-            cursor.execute('''
-                   INSERT INTO visits (url, visit_time, from_visit, transition, segment_id, visit_duration)
-                   VALUES (?, ?, ?, ?, ?, ?)
-               ''', (url_id, chrome_timestamp, 0, 805306368, 0, 0))
+                cursor.execute('''
+                    INSERT INTO visits (url, visit_time, from_visit, transition, segment_id, visit_duration)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (url_id, chrome_timestamp, 0, 805306368, 0, 0))
 
-            conn.commit()
-            conn.close()
+                conn.commit()
+                conn.close()
 
-        logger.info('Fake browsing history added successfully.')
+            logger.info('Fake browsing history added successfully.')
 
-        controller = PythonController(self.vm_ip, self.server_port)
+            controller = PythonController(self.vm_ip, self.server_port)
 
-        # get the path of the history file according to the platform
-        os_type = controller.get_vm_platform()
+            # get the path of the history file according to the platform
+            os_type = controller.get_vm_platform()
 
-        if os_type == 'Windows':
-            chrome_history_path = controller.execute_python_command(
-                """import os; print(os.path.join(os.getenv('USERPROFILE'), "AppData", "Local", "Google", "Chrome", "User Data", "Default", "History"))""")[
-                'output'].strip()
-        elif os_type == 'Darwin':
-            chrome_history_path = controller.execute_python_command(
-                """import os; print(os.path.join(os.getenv('HOME'), "Library", "Application Support", "Google", "Chrome", "Default", "History"))""")[
-                'output'].strip()
-        elif os_type == 'Linux':
-            if "arm" in platform.machine():
+            if os_type == 'Windows':
                 chrome_history_path = controller.execute_python_command(
-                    "import os; print(os.path.join(os.getenv('HOME'), 'snap', 'chromium', 'common', 'chromium', 'Default', 'History'))")[
+                    """import os; print(os.path.join(os.getenv('USERPROFILE'), "AppData", "Local", "Google", "Chrome", "User Data", "Default", "History"))""")[
                     'output'].strip()
-            else:
+            elif os_type == 'Darwin':
                 chrome_history_path = controller.execute_python_command(
-                    "import os; print(os.path.join(os.getenv('HOME'), '.config', 'google-chrome', 'Default', 'History'))")[
+                    """import os; print(os.path.join(os.getenv('HOME'), "Library", "Application Support", "Google", "Chrome", "Default", "History"))""")[
                     'output'].strip()
-        else:
-            raise Exception('Unsupported operating system')
-
-        form = MultipartEncoder({
-            "file_path": chrome_history_path,
-            "file_data": (os.path.basename(chrome_history_path), open(db_path, "rb"))
-        })
-        headers = {"Content-Type": form.content_type}
-        logger.debug(form.content_type)
-
-        # send request to server to upload file
-        try:
-            logger.debug("REQUEST ADDRESS: %s", self.http_server + "/setup" + "/upload")
-            response = requests.post(self.http_server + "/setup" + "/upload", headers=headers, data=form)
-            if response.status_code == 200:
-                logger.info("Command executed successfully: %s", response.text)
+            elif os_type == 'Linux':
+                arch = controller.get_vm_machine().lower()
+                if 'arm' in arch or 'aarch' in arch:
+                    chrome_history_path = controller.execute_python_command(
+                        "import os; print(os.path.join(os.getenv('HOME'), 'snap', 'chromium', 'common', 'chromium', 'Default', 'History'))")[
+                        'output'].strip()
+                else:
+                    chrome_history_path = controller.execute_python_command(
+                        "import os; print(os.path.join(os.getenv('HOME'), '.config', 'google-chrome', 'Default', 'History'))")[
+                        'output'].strip()
             else:
-                logger.error("Failed to upload file. Status code: %s", response.text)
-        except requests.exceptions.RequestException as e:
-            logger.error("An error occurred while trying to send the request: %s", e)
+                raise Exception('Unsupported operating system')
 
-        self._execute_setup(["sudo chown -R user:user /home/user/.config/google-chrome/Default/History"], shell=True)
+            form = MultipartEncoder({
+                "file_path": chrome_history_path,
+                "file_data": (os.path.basename(chrome_history_path), open(db_path, "rb"))
+            })
+            headers = {"Content-Type": form.content_type}
+            logger.debug(form.content_type)
+
+            # send request to server to upload file
+            try:
+                logger.debug("REQUEST ADDRESS: %s", self.http_server + "/setup" + "/upload")
+                response = requests.post(self.http_server + "/setup" + "/upload", headers=headers, data=form)
+                if response.status_code == 200:
+                    logger.info("Command executed successfully: %s", response.text)
+                else:
+                    logger.error("Failed to upload file. Status code: %s", response.text)
+            except requests.exceptions.RequestException as e:
+                logger.error("An error occurred while trying to send the request: %s", e)
+
+            self._execute_setup(["sudo chown -R user:user /home/user/.config/google-chrome/Default/History"], shell=True)

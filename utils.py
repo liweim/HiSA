@@ -799,22 +799,25 @@ def summary(result_dir, test_all_meta):
             error_file = os.path.join(result_dir, f"{domain}/{ex_id}/err_reason.txt")
 
             # --- 1. Get Score ---
-            if os.path.exists(score_file):
+            has_completed_score = os.path.exists(score_file)
+            if has_completed_score:
                 with open(score_file, "r") as f:
                     try:
                         score = eval(f.read()) * 100
                     except:
                         score = 0
             else:
-                # If no result file exists, treat score as 0 and count as remaining task
+                # Missing result file means the task has not completed yet.
                 score = 0
             if score > 0 and os.path.exists(error_file):
                 os.remove(error_file)
             if not os.path.exists(score_file) or os.path.exists(error_file):
                 count_remain += 1
-            
-            all_scores.append(score)
-            stats[domain]["score"].append(score)
+
+            score_50 = 0
+            if has_completed_score:
+                all_scores.append(score)
+                stats[domain]["score"].append(score)
 
             # --- 2. Check for Errors ---
             # If an error file exists, skip statistics and fail logging after recording the score.
@@ -823,14 +826,17 @@ def summary(result_dir, test_all_meta):
                 print(f"Error file exists: {error_file}")
                 assert score == 0, f"Score is not 0 when error file exists: {error_file}"
                 count_errors += 1
+                all_scores_50.append(score_50)
                 continue 
 
             # --- 3. Process Execution Log ---
             # Logic reaches here only if err_reason.txt does not exist.
             
             if os.path.exists(execution_log_file):
-                with open(execution_log_file, "r", encoding="utf-8") as f:
-                    execution_log = json.load(f)
+                try:
+                    with open(execution_log_file, "r", encoding="utf-8") as f:
+                        execution_log = json.load(f)
+
                     execution_stats = execution_log.get("statistics", {})
                     
                     # Extract basic data
@@ -876,19 +882,27 @@ def summary(result_dir, test_all_meta):
                     stats[domain]["prompt_tokens"].append(prompt_tokens)
                     stats[domain]["completion_tokens"].append(completion_tokens)
                     stats[domain]["image_counts"].append(image_count)
-                    if gui_steps+code_steps > 50:
-                        all_scores_50.append(0)
-                    else:
-                        all_scores_50.append(score)
+                    total_task_steps = gui_steps + code_steps
+                    if total_task_steps <= 50:
+                        score_50 = score
+                    all_scores_50.append(score_50)
+                except:
+                    print(f"error loading execution_log_file: {execution_log_file}")
+                    if has_completed_score:
+                        all_scores_50.append(score_50)
+                    continue
             else:
                 if os.path.exists(score_file):
                     print(f"not found: {execution_log_file}")
+                if has_completed_score:
+                    all_scores_50.append(score_50)
                 continue
 
-    num_tasks = len(all_scores)
+    num_tasks = sum(len(example_ids) for example_ids in test_all_meta.values())
+    num_completed_scores = len(all_scores)
     num_tasks_with_log = len(all_costs)  # Number of tasks with execution_log
-    avg_score = np.mean(all_scores)
-    # avg_score_50 = np.sum(all_scores_50) / num_tasks
+    avg_score = np.mean(all_scores) if num_completed_scores > 0 else 0
+    avg_score_50 = np.mean(all_scores_50) if num_completed_scores > 0 else 0
     total_cost = sum(all_costs)
 
     # Calculate total operations and tokens
@@ -920,9 +934,9 @@ def summary(result_dir, test_all_meta):
     detailed_stats = {
         "summary": {
             "score": avg_score,
-            # "score_50": avg_score_50,
+            "score_50": avg_score_50,
             "total_tasks": num_tasks,
-            "completed_tasks": num_tasks_with_log,
+            "completed_tasks": num_completed_scores,
             "left_tasks": count_remain,  # All incomplete tasks
             "error_tasks": count_errors,  # Only tasks with err_reason.txt
             "total": {
@@ -938,7 +952,7 @@ def summary(result_dir, test_all_meta):
             },
             "average": {
                 "score": avg_score,
-                # "score_50": avg_score_50,
+                "score_50": avg_score_50,
                 "cost": avg_cost,
                 "tokens": avg_total_tokens,
                 "prompt_tokens": avg_prompt_tokens,
@@ -957,19 +971,21 @@ def summary(result_dir, test_all_meta):
         },
         "domain_breakdown": {
             domain: {
-                "score": np.mean(stats[domain]["score"]),
-                "cost": np.mean(stats[domain]["cost"]),
-                "tokens": np.mean(stats[domain]["prompt_tokens"])
-                + np.mean(stats[domain]["completion_tokens"]),
-                "prompt_tokens": np.mean(stats[domain]["prompt_tokens"]),
+                "score": np.mean(stats[domain]["score"]) if len(stats[domain]["score"]) > 0 else 0,
+                "cost": np.mean(stats[domain]["cost"]) if len(stats[domain]["cost"]) > 0 else 0,
+                "tokens": (
+                    np.mean(stats[domain]["prompt_tokens"])
+                    + np.mean(stats[domain]["completion_tokens"])
+                ) if len(stats[domain]["prompt_tokens"]) > 0 and len(stats[domain]["completion_tokens"]) > 0 else 0,
+                "prompt_tokens": np.mean(stats[domain]["prompt_tokens"]) if len(stats[domain]["prompt_tokens"]) > 0 else 0,
                 "completion_tokens": np.mean(
                     stats[domain]["completion_tokens"]
-                ),
-                "image_counts": np.mean(stats[domain]["image_counts"]),
-                "steps": np.mean(stats[domain]["total_steps"]),
-                "cua_steps": np.mean(stats[domain]["gui_steps"]),
-                "code_steps": np.mean(stats[domain]["code_steps"]),
-                "execution_time": np.mean(stats[domain]["execution_time"]),
+                ) if len(stats[domain]["completion_tokens"]) > 0 else 0,
+                "image_counts": np.mean(stats[domain]["image_counts"]) if len(stats[domain]["image_counts"]) > 0 else 0,
+                "steps": np.mean(stats[domain]["total_steps"]) if len(stats[domain]["total_steps"]) > 0 else 0,
+                "cua_steps": np.mean(stats[domain]["gui_steps"]) if len(stats[domain]["gui_steps"]) > 0 else 0,
+                "code_steps": np.mean(stats[domain]["code_steps"]) if len(stats[domain]["code_steps"]) > 0 else 0,
+                "execution_time": np.mean(stats[domain]["execution_time"]) if len(stats[domain]["execution_time"]) > 0 else 0,
             }
             for domain in test_all_meta
         },
@@ -978,6 +994,25 @@ def summary(result_dir, test_all_meta):
     with open(os.path.join(result_dir, "summary.json"), "w", encoding="utf-8") as f:
         json.dump(detailed_stats, f, indent=2, ensure_ascii=False)
 
-    print(json.dumps(detailed_stats['summary'], indent=2, ensure_ascii=False))
-    print(f'results saved to {os.path.join(result_dir, "summary.json")}')
+    summary_stats = detailed_stats['summary']
+    # print(json.dumps(summary_stats, indent=2, ensure_ascii=False))
+
+    total_tasks = summary_stats['total_tasks']
+    left_tasks = summary_stats['left_tasks']
+    error_tasks = summary_stats['error_tasks']
+    avg_score = summary_stats['score']
+    avg_score_50 = summary_stats['score_50']
+    avg_cost = summary_stats['average']['cost']
+    avg_total_tokens = summary_stats['average']['tokens']
+    avg_prompt_tokens = summary_stats['average']['prompt_tokens']
+    avg_completion_tokens = summary_stats['average']['completion_tokens']
+    avg_steps = summary_stats['average']['steps']
+    avg_execution_time = summary_stats['average']['execution_time']
+    
+    print(f"Total tasks: {total_tasks}, Left tasks: {left_tasks}, Error tasks: {error_tasks}")
+    print(f"method, score, score_50, cost, tokens, prompt_tokens, completion_tokens, steps, execution_time:\n{os.path.basename(result_dir)},{avg_score:.2f},{avg_score_50:.2f},{avg_cost:.2f},{avg_total_tokens:.2f},{avg_prompt_tokens:.2f},{avg_completion_tokens:.2f},{avg_steps:.2f},{avg_execution_time:.2f}")
+    print('*'*100)
     return detailed_stats
+
+if __name__ == "__main__":
+    summary('results/hisa1_qwen3.5-9b_wo_pattern_ori_res', 'benchmarks/OSWorld/evaluation_examples/test_few.json')
