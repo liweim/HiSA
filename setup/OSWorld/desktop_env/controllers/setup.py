@@ -32,7 +32,7 @@ PROXY_CONFIG_FILE = os.getenv("PROXY_CONFIG_FILE", "evaluation_examples/settings
 logger = logging.getLogger("desktopenv.setup")
 
 FILE_PATH = os.path.dirname(os.path.abspath(__file__))
-OSWORLD_ROOT = os.path.abspath(os.path.join(FILE_PATH, "..", ".."))
+BENCH_ROOT = os.path.abspath(os.path.join(FILE_PATH, "..", ".."))
 
 init_proxy_pool(PROXY_CONFIG_FILE)  # initialize the global proxy pool
 
@@ -60,7 +60,7 @@ class SetupController:
             return path
         if os.path.isabs(path):
             return path
-        return os.path.abspath(os.path.join(OSWORLD_ROOT, path))
+        return os.path.abspath(os.path.join(BENCH_ROOT, path))
 
     def setup(self, config: List[Dict[str, Any]], use_proxy: bool = False)-> bool:
         """

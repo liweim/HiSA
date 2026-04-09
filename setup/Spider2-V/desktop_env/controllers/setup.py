@@ -29,6 +29,7 @@ from desktop_env import configs
 logger = logging.getLogger("desktopenv.setup")
 
 FILE_PATH = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(FILE_PATH, "..", ".."))
 
 
 class SetupController:
@@ -39,6 +40,55 @@ class SetupController:
         self.cache_dir: str = cache_dir
         self.screen_width: int = screen_width
         self.screen_height: int = screen_height
+
+    def _resolve_project_path(self, path: str) -> str:
+        if not path:
+            return path
+        if os.path.isabs(path):
+            return path
+        resolved = os.path.abspath(os.path.join(PROJECT_ROOT, path))
+        if platform.system() == 'Windows':
+            resolved = resolved.replace('/', '\\')
+        return resolved
+
+    def _materialize_settings_with_absolute_paths(
+        self,
+        settings_file: str,
+        keys: List[str],
+    ) -> str:
+        resolved_settings_file = self._resolve_project_path(settings_file)
+        if not os.path.exists(resolved_settings_file):
+            raise FileNotFoundError(f"Settings file not found: {resolved_settings_file}")
+
+        with open(resolved_settings_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        rewritten_lines = []
+        target_keys = set(keys)
+        for line in lines:
+            stripped = line.strip()
+            if ":" not in stripped or stripped.startswith("#"):
+                rewritten_lines.append(line)
+                continue
+
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+
+            if key in target_keys and value:
+                rewritten_lines.append(f"{key}: {self._resolve_project_path(value)}\n")
+            else:
+                rewritten_lines.append(line)
+
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".yml",
+            delete=False,
+            encoding="utf-8",
+        )
+        with tmp as f:
+            f.writelines(rewritten_lines)
+        return tmp.name
 
     def reset_cache_dir(self, cache_dir: str):
         self.cache_dir = cache_dir
@@ -772,10 +822,10 @@ class SetupController:
                     path(str): remote url to download file
                     dest(List[str]): the path in the google drive to store the downloaded file
         """
-        settings_file = config.get('settings_file', 'evaluation_examples/settings/googledrive/settings.yml')
-        if platform.system() == 'Windows':
-            settings_file = settings_file.replace('/', '\\')
-
+        settings_file = self._materialize_settings_with_absolute_paths(
+            config.get('settings_file', 'evaluation_examples/settings/googledrive/settings.yml'),
+            ['client_config_file', 'save_credentials_file'],
+        )
         gauth = GoogleAuth(settings_file=settings_file)
         drive = GoogleDrive(gauth)
 
@@ -880,9 +930,9 @@ class SetupController:
                 except:
                     logger.warning("Opening %s exceeds time limit", url)  # only for human test
                 logger.info(f"Opened new page: {url}")
-                settings_file = config.get('settings_file', 'evaluation_examples/settings/google/settings.json')
-                if platform.system() == 'Windows':
-                    settings_file = settings_file.replace('/', '\\')
+                settings_file = self._resolve_project_path(
+                    config.get('settings_file', 'evaluation_examples/settings/google/settings.json')
+                )
                 settings = json.load(open(settings_file, 'r'))
                 email, password = settings['email'], settings['password']
 

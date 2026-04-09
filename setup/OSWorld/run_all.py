@@ -8,10 +8,10 @@ import logging
 import textwrap
 import subprocess
 
-OSWORLD_ROOT = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(OSWORLD_ROOT, "../.."))
+BENCH_ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(BENCH_ROOT, "../.."))
 
-for path in (PROJECT_ROOT, OSWORLD_ROOT):
+for path in (PROJECT_ROOT, BENCH_ROOT):
     if path not in sys.path:
         sys.path.insert(0, path)
 
@@ -45,6 +45,8 @@ def filter_tasks(args, test_all_meta: dict, logger) -> List[tuple]:
             if not args.rerun and os.path.exists(result_path) and not os.path.exists(err_reason_path):
                 try:
                     result = float(open(result_path, 'r').read().strip())
+                    if result <= 0.0 and args.rerun_fail:
+                        os.remove(result_path)
                     # Skip successful tasks, or failed tasks if not rerun_fail
                     if result > 0.0 or not args.rerun_fail:
                         should_skip = True

@@ -3,14 +3,24 @@ import os
 import sys
 import json
 from typing import List
+from tqdm import tqdm
+import logging
+import textwrap
+import subprocess
+
+BENCH_ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(BENCH_ROOT, "../.."))
+
+for path in (PROJECT_ROOT, BENCH_ROOT):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
 from desktop_env.envs.desktop_env import DesktopEnv
 
-sys.path.append("../..")
 from utils import summary, setup_logger
 
 # Global variables
 logger = None  # Will be initialized in run()
-
 
 def filter_tasks(args, test_all_meta: dict, logger) -> List[tuple]:
     """
@@ -35,6 +45,8 @@ def filter_tasks(args, test_all_meta: dict, logger) -> List[tuple]:
             if not args.rerun and os.path.exists(result_path) and not os.path.exists(err_reason_path):
                 try:
                     result = float(open(result_path, 'r').read().strip())
+                    if result <= 0.0 and args.rerun_fail:
+                        os.remove(result_path)
                     # Skip successful tasks, or failed tasks if not rerun_fail
                     if result > 0.0 or not args.rerun_fail:
                         should_skip = True
@@ -45,6 +57,76 @@ def filter_tasks(args, test_all_meta: dict, logger) -> List[tuple]:
                 tasks_to_run.append((domain, example_id))
     
     return tasks_to_run
+
+
+def _ensure_vm_resolution(env, width: int, height: int, logger: logging.Logger) -> None:
+    if width == 1920 and height == 1080:
+        return
+        
+    script = textwrap.dedent(f"""
+        import os
+        import subprocess
+
+        os.environ["DISPLAY"] = ":0"
+        output = subprocess.check_output(
+            "xrandr --query | awk '/ connected/{{print $1; exit}}'",
+            shell=True,
+            text=True
+        ).strip()
+        if not output:
+            raise RuntimeError("No connected display output found")
+
+        mode = "{width}x{height}"
+        modes = subprocess.check_output("xrandr | awk '{{print $1}}'", shell=True, text=True).split()
+        if mode in modes:
+            subprocess.check_call(["xrandr", "--output", output, "--mode", mode])
+        else:
+            if subprocess.call("command -v cvt >/dev/null 2>&1", shell=True) != 0:
+                raise RuntimeError("cvt not found; install x11-xserver-utils in the VM")
+            cvt_out = subprocess.check_output(
+                "cvt {width} {height}",
+                shell=True,
+                text=True
+            ).splitlines()
+            if len(cvt_out) < 2:
+                raise RuntimeError("cvt output is invalid")
+            parts = cvt_out[1].split()
+            if len(parts) < 3 or parts[0] != "Modeline":
+                raise RuntimeError("Unexpected cvt output: " + cvt_out[1])
+            name = parts[1].strip('"')
+            params = parts[2:]
+            subprocess.call(["xrandr", "--newmode", name, *params])
+            subprocess.call(["xrandr", "--addmode", output, name])
+            subprocess.check_call(["xrandr", "--output", output, "--mode", name])
+    """).strip()
+
+    try:
+        result = env.controller.run_python_script(script)
+    except Exception as exc:
+        raise SystemExit(f"Failed to set VM resolution: {exc}")
+
+    if result and result.get("status") == "error":
+        raise SystemExit(f"Failed to set VM resolution: {result.get('error')}")
+
+    size = env.controller.get_vm_screen_size() or {}
+    if size.get("width") != width or size.get("height") != height:
+        raise SystemExit(
+            f"VM resolution mismatch: got {size.get('width')}x{size.get('height')}, expected {width}x{height}"
+        )
+    logger.info(f"VM resolution set to {width}x{height}")
+
+
+def _attach_resolution_guard(env, width: int, height: int, logger: logging.Logger) -> None:
+    """Ensure VM resolution after every env.reset call."""
+    original_reset = env.reset
+
+    def guarded_reset(*args, **kwargs):
+        result = original_reset(*args, **kwargs)
+        _ensure_vm_resolution(env, width, height, logger)
+        return result
+
+    env.reset = guarded_reset
+
 
 def run():
     parser = argparse.ArgumentParser(description="Run evaluation for agent framework")
@@ -61,7 +143,7 @@ def run():
     parser.add_argument(
         "--path_to_vm",
         type=str,
-        default="./vm_data/Ubuntu0/Ubuntu0/Ubuntu0.vmx",
+        default="./vmware_vm_data/Ubuntu0/Ubuntu0.vmx",
         help="Path to VM file",
     )
     parser.add_argument("--snapshot_name", type=str, default="low_res")
@@ -235,16 +317,22 @@ def run():
     parser.add_argument(
         "--global_planner_model",
         type=str,
-        default="o3",
+        default="qwen3.5-9b",
         help="Model for Global Planner agent",
     )
     parser.add_argument(
         "--visual_grounder_model",
         type=str,
-        default="computer-use-preview",
+        default="gta1-7b",
         help="Model for Visual Grounder agent",
     )
-    parser.add_argument("--state_manager_model", type=str, default="gpt-5-mini",
+    parser.add_argument(
+        "--visual_grounder_scale",
+        type=float,
+        default=1.0,
+        help="Scale factor for visual grounder image preprocessing",
+    )
+    parser.add_argument("--state_manager_model", type=str, default="qwen3.5-9b",
                        help="Model for auxiliary tasks (step abstraction, context refinement, pattern induction, etc.)")
     parser.add_argument("--wo_pattern", action="store_true", help="Disable pattern induction (pattern induction is enabled by default)")
     parser.add_argument("--wo_roi", action="store_true",
@@ -311,14 +399,22 @@ def run():
     
     # Create environment
     env = DesktopEnv(
+        provider_name=args.provider_name,
         path_to_vm=args.path_to_vm,
-        snapshot_name=args.snapshot_name,
         action_space=args.action_space,
+        snapshot_name=args.snapshot_name,
         headless=args.headless,
         require_a11y_tree=False,
-        screen_size=(args.screen_width, args.screen_height)
+        screen_size=(args.screen_width, args.screen_height),
     )
     args.env = env
+
+    _attach_resolution_guard(
+        args.env,
+        args.screen_width,
+        args.screen_height,
+        logger,
+    )
 
     # Import run function
     if args.method == "coact":
@@ -327,13 +423,18 @@ def run():
         from agents.run_agents3 import run
     elif args.method == "hisa":
         from agents.run_hisa import run
+    elif args.method == "hisa1":
+        from agents.run_hisa1 import run
+    elif args.method == "hisa2":
+        from agents.run_hisa2 import run
+    elif args.method == "hisa3":
+        from agents.run_hisa3 import run
     elif args.method == "gta1":
         from agents.run_gta1_agent import run
     else:
         raise ValueError(f"Invalid method: {args.method}")
     
     # Execute tasks one by one
-    from tqdm import tqdm
     for domain, example_id in tqdm(tasks_to_run, desc="Processing tasks"):
         logger.info(f"Processing {domain}/{example_id} for method {args.result_dir}")
         try:
