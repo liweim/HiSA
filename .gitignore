@@ -8,6 +8,8 @@ tmp*
 configs
 benchmarks
 .vmware_vms
+command
+result.csv
 
 # Model checkpoints
 *.pth
