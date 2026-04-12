@@ -258,11 +258,6 @@ def run(args, logger=None, tasks=None):
                     scores[result_domain] = []
                 scores[result_domain].append(score)
 
-    # Calculate and display final results with cost information
-    # Summary accepts tasks list directly
-    if tasks:
-        summary(args.result_dir, tasks)
-
 if __name__ == "__main__":
     args = config()
     run(args)

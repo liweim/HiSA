@@ -7,6 +7,7 @@ tmp*
 *.out
 configs
 benchmarks
+.vmware_vms
 
 # Model checkpoints
 *.pth

@@ -728,6 +728,24 @@ class HiSA:
             }
         return delta
 
+    def _wait_for_stable_screenshot(
+        self,
+        timeout_seconds: float,
+        stable_repeats: int = 5,
+        interval_seconds: float = 1.0,
+    ) -> Optional[bytes]:
+        wait_seconds = max(0.0, float(timeout_seconds))
+        self.logger.info(
+            "sleeping %.1fs before capture.",
+            wait_seconds,
+        )
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
+        screenshot = self.env.controller.get_screenshot()
+        if screenshot is None:
+            self.logger.warning("Screenshot capture unavailable after fixed wait.")
+        return screenshot
+
     def _context_refinement(self, logs: List[Dict], start_step: int, end_step: int, previous_summary: str = "") -> str:
         """Summarize a segment of action logs with context refinement."""
         
@@ -841,6 +859,13 @@ class HiSA:
         # Setup directories
         self.operations_dir = os.path.join(self.save_dir, "operations")
         os.makedirs(self.operations_dir, exist_ok=True)
+        self.logger.info("Waiting a fixed 10.0s before capturing the initial screenshot...")
+        initial_screenshot = self._wait_for_stable_screenshot(timeout_seconds=10.0)
+        if initial_screenshot is None:
+            self.logger.warning("Failed to capture any initial screenshot before agent execution; continuing without step_0.png.")
+        else:
+            with open(os.path.join(self.operations_dir, "step_0.png"), "wb") as f:
+                f.write(initial_screenshot)
 
         self.logger.info(f"Global Planner: {self.global_planner_model}")
         self.logger.info(f"Visual Grounder: {self.visual_grounder_model}")
@@ -1177,7 +1202,7 @@ Based on the execution_history and current screenshot, decide the next action. A
                 if decision["tool"] not in ["gui_action", "bash_execution", "wait", "termination", "infeasible"]:
                     raise ValueError(f"Invalid tool: {decision['tool']}")
 
-                self.logger.info(f"Tool: {decision.get('tool', 'N/A')} | Thought: {decision.get('thought', '')[:100]}")
+                self.logger.info(f"Tool: {decision.get('tool', 'N/A')} | Thought: {decision.get('thought', '')}")
 
                 # Clear error feedback on success
                 self.last_error_feedback = None
@@ -1313,11 +1338,7 @@ Based on the execution_history and current screenshot, decide the next action. A
             final_code = postprocess_action(code)
             obs, *_ = self.env.step(final_code, self.sleep_after_execution)
 
-            # Wait 10 seconds for action to take effect
-            time.sleep(10)
-
-            # Get after screenshot and evaluate
-            after_screenshot = obs['screenshot']
+            after_screenshot = self._wait_for_stable_screenshot(timeout_seconds=self.sleep_after_execution) or obs['screenshot']
 
             # Create description for step abstraction
             eval_desc = description if description else code
@@ -1488,11 +1509,9 @@ Based on the execution_history and current screenshot, decide the next action. A
             exitcode = 0 if output_dict["status"] == "success" else 1
             logs = output_dict["output"]
 
-            # Wait 10 seconds for action to take effect
-            time.sleep(10)
-
-            # Get after screenshot
-            after_screenshot = self.env.controller.get_screenshot()
+            after_screenshot = self._wait_for_stable_screenshot(timeout_seconds=self.sleep_after_execution)
+            if after_screenshot is None:
+                raise RuntimeError("Failed to capture a screenshot after bash execution.")
             screenshot_file = f"step_{step}_bash.png"
 
             with open(os.path.join(self.operations_dir, screenshot_file), "wb") as f:
@@ -1679,9 +1698,9 @@ Based on the execution_history and current screenshot, decide the next action. A
             # self.logger.info("Closing temporary windows...")
             # self.env.step("pyautogui.press('esc')", 0.5)
 
-            # Wait for VM HTTP service to stabilize after task execution
-            self.logger.info("Waiting for VM to stabilize before evaluation...")
-            time.sleep(10)
+            self.logger.info("Waiting a fixed 10.0s before evaluation...")
+            if self._wait_for_stable_screenshot(timeout_seconds=10.0) is None:
+                raise RuntimeError("Failed to capture a screenshot before evaluation.")
             
             # Retry evaluation with exponential backoff to handle transient VM service issues
             max_retries = 3
