@@ -837,15 +837,16 @@ class HiSA:
         additional_context: Optional[str] = None,
     ) -> float:
         """Execute task using tool-calling loop."""
-        
-        # Record start time for execution time tracking
-        self.start_time = time.time()
 
         # Reset state
         self.global_planner_llm.reset_stats()
         self.visual_grounder_llm.reset_stats()
         self.state_manager_llm.reset_stats()
         self.env.reset(task_config=task_config)
+        
+        # Record start time after environment reset so provisioning work
+        # such as docker guest dependency installation is excluded.
+        self.start_time = time.time()
         self.operation_count = 0
         self.action_logs = []
         self.last_full_summary = None

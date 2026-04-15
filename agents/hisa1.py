@@ -1420,15 +1420,16 @@ class HiSA:
         additional_context: Optional[str] = None,
     ) -> float:
         """Execute task using tool-calling loop."""
-        
-        # Record start time for execution time tracking
-        self.start_time = time.time()
 
         # Reset state
         self.global_planner_llm.reset_stats()
         self.visual_grounder_llm.reset_stats()
         self.state_manager_llm.reset_stats()
         self.env.reset(task_config=task_config)
+        
+        # Record start time after environment reset so provisioning work
+        # such as docker guest dependency installation is excluded.
+        self.start_time = time.time()
         self.operation_count = 0
         self.action_logs = []
         self.last_full_summary = None
@@ -2645,6 +2646,7 @@ except subprocess.TimeoutExpired as e:
                 logs = output_dict.get("message", "")
             if status != "success" and output_dict.get("error"):
                 logs = (logs + "\n" + output_dict.get("error", "")).strip()
+            self.logger.info("[bash_output]\n%s", logs if logs else "")
 
             after_screenshot = self._wait_for_stable_screenshot(timeout_seconds=30.0, stable_repeats=2)
             if after_screenshot is None:

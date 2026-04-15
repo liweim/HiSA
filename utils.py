@@ -1013,3 +1013,7 @@ def summary(result_dir, test_all_meta):
     print(f"method, score, score_50, cost, tokens, prompt_tokens, completion_tokens, steps, execution_time:\n{os.path.basename(result_dir)},{avg_score:.2f},{avg_score_50:.2f},{avg_cost:.2f},{avg_total_tokens:.2f},{avg_prompt_tokens:.2f},{avg_completion_tokens:.2f},{avg_steps:.2f},{avg_execution_time:.2f}")
     print('*'*100)
     return detailed_stats
+
+if __name__ == "__main__":
+    summary('results/hisa2_qwen3.5-9b_wo_pattern', 'benchmarks/OSWorld/evaluation_examples/debug.json')
+    summary('results/hisa2_qwen3.5-9b_wo_pattern_old', 'benchmarks/OSWorld/evaluation_examples/debug.json')

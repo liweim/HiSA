@@ -18,6 +18,16 @@ logger = logging.getLogger("desktopenv.env")
 
 Metric = Callable[[Any, Any], float]
 Getter = Callable[[gym.Env, Dict[str, Any]], Any]
+GUEST_PYTHON_PACKAGES = [
+    "openpyxl",
+    "pandas",
+    "odfpy",
+    "xlrd",
+    "python-docx",
+    "lxml",
+    "pyxlsb",
+    "xlsxwriter",
+]
 
 
 def _execute_command(command: List[str]) -> None:
@@ -208,6 +218,34 @@ class DesktopEnv(gym.Env):
     def _save_state(self):
         _execute_command(["vmrun", "-T", "ws" "snapshot", self.path_to_vm, self.snapshot_name])
 
+    def _ensure_guest_python_deps(self):
+        install_script = (
+            "set -e\n"
+            "python3 -m pip install --user " + " ".join(GUEST_PYTHON_PACKAGES)
+        )
+        logger.info(
+            "Installing default Python packages inside guest VM: %s",
+            ", ".join(GUEST_PYTHON_PACKAGES),
+        )
+        result = self.controller.run_bash_script(
+            install_script,
+            timeout=900,
+            working_dir="~",
+        )
+        result = result or {}
+        status = result.get("status", "")
+        returncode = int(result.get("returncode", -1))
+        output = str(result.get("output", "") or "")
+        error = str(result.get("error", "") or "")
+        if status == "success" and returncode == 0:
+            logger.info("Guest Python dependency installation completed successfully.")
+            return
+
+        raise RuntimeError(
+            "Failed to install default Python packages inside guest VM. "
+            f"status={status}, returncode={returncode}, output={output}, error={error}"
+        )
+
     def _get_obs(self):
         return {
             "screenshot": self.controller.get_screenshot(),
@@ -285,6 +323,8 @@ class DesktopEnv(gym.Env):
         logger.info("Setting up environment ...")
         if not self.setup_controller._network_setup(self.vm_platform):
             logger.error("Network is not available!")
+
+        self._ensure_guest_python_deps()
 
         # Set screen resolution after network is up
         try:

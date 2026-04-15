@@ -853,15 +853,16 @@ class HiSA:
         additional_context: Optional[str] = None,
     ) -> float:
         """Execute task using tool-calling loop."""
-        
-        # Record start time for execution time tracking
-        self.start_time = time.time()
 
         # Reset state
         self.global_planner_llm.reset_stats()
         self.visual_grounder_llm.reset_stats()
         self.state_manager_llm.reset_stats()
         self.env.reset(task_config=task_config)
+        
+        # Record start time after environment reset so provisioning work
+        # such as docker guest dependency installation is excluded.
+        self.start_time = time.time()
         self.operation_count = 0
         self.action_logs = []
         self.last_full_summary = None
@@ -1703,6 +1704,7 @@ Based on the execution_history and current screenshot, decide the next action. A
             output_dict = self.env.controller.run_bash_script(code, timeout=self.bash_timeout)
             exitcode = 0 if output_dict["status"] == "success" else 1
             logs = output_dict["output"]
+            self.logger.info("[bash_output]\n%s", logs if logs else "")
 
             after_screenshot = self._wait_for_stable_screenshot(timeout_seconds=self.sleep_after_execution)
             if after_screenshot is None:
