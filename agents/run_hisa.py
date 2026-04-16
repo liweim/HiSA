@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 from typing import Dict, List, Tuple
-from agents.hisa import HiSA
+from agents.hisa.hisa import HiSA
 import traceback
 from utils import build_additional_contexts, summary, save_args_to_settings, setup_logger
 

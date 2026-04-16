@@ -234,15 +234,15 @@ IMPORTANT Guidelines:
 
 Format as a JSON list of objects with type and lesson (maximum 3 items):
 [
-  {{"type": "domain", "lesson": "For this task family, method X worked: ..."}},
   {{"type": "env", "lesson": "In this environment, UI Y needed wait or special handling"}},
   {{"type": "failure", "lesson": "DON'T use method Y: tried 3 times, doesn't work"}}
 ]
 
-Type values (ONLY these three):
-- "domain": A reusable strategy for similar GUI tasks
+Type values (ONLY these two):
 - "env": An environment-specific quirk or UI behavior that clearly mattered
-- "failure": A method/strategy that clearly failed after multiple attempts"""
+- "failure": A method/strategy that clearly failed after multiple attempts
+
+Do not output `domain`, `require`, or `success`."""
 
 PATTERN_SYNTHESIS_PROMPT = """Given the current task and past lessons from the same domain, provide a concise, refined summary of actionable advice.
 
@@ -290,16 +290,12 @@ class PatternManager:
         self,
         llm: Optional[AbstractLLM] = None,
         prompt_dump_callback: Optional[Callable[..., None]] = None,
-        qdrant_path: str = "./qdrant_storage",
-        embedding_service_url: str = "http://localhost:8888",
-        similarity_threshold: float = 0.7,
-        use_qdrant_server: bool = True,  # Default to server mode for multi-process
-        qdrant_server_url: str = "http://localhost:6333"
+        memory_root: str = "",
     ):
         self.llm = llm
         self.prompt_dump_callback = prompt_dump_callback
         self.logger = logging.getLogger("desktopenv.pattern")
-        base_memory_root = qdrant_path or os.path.join(os.path.dirname(__file__), "memories")
+        base_memory_root = memory_root or os.path.join(os.path.dirname(__file__), "memories")
         self.memory_root = os.path.abspath(base_memory_root)
         os.makedirs(self.memory_root, exist_ok=True)
         self.logger.info(
@@ -639,9 +635,7 @@ class PatternManager:
                 validated_lessons = []
                 for item in lessons[:3]:  # Max 3 lessons
                     if isinstance(item, dict) and "type" in item and "lesson" in item:
-                        if item["type"] in ["domain", "env", "failure", "require", "success"]:
-                            if item["type"] == "success":
-                                item = {"type": "domain", "lesson": item["lesson"]}
+                        if item["type"] in ["env", "failure"]:
                             validated_lessons.append(item)
                         else:
                             self.logger.warning(f"Invalid lesson type '{item['type']}', skipping")
@@ -821,13 +815,11 @@ class HiSA:
         screen_height: int = 1080,
         sleep_after_execution: float = 0.5,
         max_steps: int = 15,
+        result_dir: str = "",
         save_dir: str = "",
         record: bool = False,
         max_parse_retries: int = 3,
         wo_pattern: bool = False,  # If True, disable pattern induction (default: False means pattern induction is enabled)
-        pattern_dir: str = "",
-        use_qdrant_server: bool = False,  # Use server mode by default for multi-process
-        qdrant_server_url: str = "http://localhost:6333",
         wo_roi: bool = False,  # If True, disable ROI cropping (default: False means ROI cropping is enabled)
         roi_margin: int = 50,  # Margin around ROI when cropping
         refine_period: int = 10,
@@ -847,6 +839,7 @@ class HiSA:
         self.screen_height = screen_height
         self.sleep_after_execution = sleep_after_execution
         self.max_steps = max_steps
+        self.result_dir = result_dir
         self.save_dir = save_dir
         self.record = record
         self.max_parse_retries = max_parse_retries
@@ -861,25 +854,20 @@ class HiSA:
         self.sliding_window_size = sliding_window_size  # Sliding window size for conversation history
 
         self.logger = logging.getLogger("desktopenv")
-        self.skills_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "skills")
+        self.skills_dir = os.path.join(os.path.dirname(__file__), "skills")
 
         # Initialize LLM clients
         self.global_planner_llm = AbstractLLM(global_planner_model, logger=self.logger)
         self.visual_grounder_llm = AbstractLLM(visual_grounder_model, logger=self.logger)
         self.state_manager_llm = AbstractLLM(state_manager_model, logger=self.logger)
 
-        # Initialize pattern manager
-        if not pattern_dir:
-            pattern_dir = os.path.join(save_dir, "memories")
+        pattern_dir = os.path.join(result_dir, "memories")
 
         if not self.wo_pattern:
             self.pattern_manager = PatternManager(
                 llm=self.global_planner_llm,
                 prompt_dump_callback=self._dump_prompt_entry,
-                qdrant_path=pattern_dir,
-                similarity_threshold=0.7,
-                use_qdrant_server=use_qdrant_server,
-                qdrant_server_url=qdrant_server_url
+                memory_root=pattern_dir,
             )
             self.logger.info(f"Pattern manager initialized")
 
@@ -3603,15 +3591,36 @@ except subprocess.TimeoutExpired as e:
             )
             score = 0.0
 
+        unique_logged_steps = {
+            int(log.get("step"))
+            for log in self.action_logs
+            if log.get("step") is not None
+        }
         gui_steps = len({
             log.get("step")
             for log in self.action_logs
             if log.get("type") in GUI_ACTION_TOOLS and log.get("step") is not None
         })
-        bash_steps = len([log for log in self.action_logs if log["type"] == "bash_execution"])
-        wait_steps = len([log for log in self.action_logs if log["type"] == "wait"])
-        termination_steps = len([log for log in self.action_logs if log["type"] == "termination"])
-        infeasible_steps = len([log for log in self.action_logs if log["type"] == "infeasible"])
+        bash_steps = len({
+            int(log.get("step"))
+            for log in self.action_logs
+            if log.get("type") == "bash_execution" and log.get("step") is not None
+        })
+        wait_steps = len({
+            int(log.get("step"))
+            for log in self.action_logs
+            if log.get("type") == "wait" and log.get("step") is not None
+        })
+        termination_steps = len({
+            int(log.get("step"))
+            for log in self.action_logs
+            if log.get("type") == "termination" and log.get("step") is not None
+        })
+        infeasible_steps = len({
+            int(log.get("step"))
+            for log in self.action_logs
+            if log.get("type") == "infeasible" and log.get("step") is not None
+        })
 
         global_planner_cost, global_planner_prompt, global_planner_completion, global_planner_images = self.global_planner_llm.get_usage()
         visual_grounder_cost, visual_grounder_prompt, visual_grounder_completion, visual_grounder_images = self.visual_grounder_llm.get_usage()
@@ -3634,7 +3643,7 @@ except subprocess.TimeoutExpired as e:
         execution_log = {
             "statistics": {
                 "score": score,
-                "total_steps": self.operation_count,
+                "total_steps": len(unique_logged_steps),
                 "cua_steps": gui_steps,
                 "coding_steps": bash_steps,
                 "wait_steps": wait_steps,

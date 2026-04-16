@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-import ast
 import base64
 import json
 import os
 import logging
 import traceback
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List
 from llm import AbstractLLM
 from utils import serialize_json, get_change_roi
 from json_repair import repair_json
 from utils import postprocess_action
 import re
-from qdrant import QdrantManager, add_lessons_to_existing
-from embedding import EmbeddingClient
+from agents.hisa.qdrant import QdrantManager, add_lessons_to_existing
+from agents.hisa.embedding import EmbeddingClient
 from PIL import Image
 import io
 import time
@@ -26,11 +25,11 @@ GLOBAL_PLANNER_PROMPT = """You are an expert in GUIs and bash code executing tas
 1. **CRITICAL: Do ONLY what the task asks - nothing more, nothing less**
 2. **CRITICAL: Use as LEAST steps as possible to complete the task**
 3. **CRITICAL: When all required steps are done, termination IMMEDIATELY**
-4. **CRITICAL: ALWAYS review the prior messages, summaries, and recent steps before deciding next action:**
+4. **CRITICAL: ALWAYS review <execution_history> before deciding next action:**
    - Check what actions have been done and their results
    - Avoid repeating the same action more than 3 times
    - Count completed steps to judge task completion
-5. You receive: screenshot, prior messages, summaries of previous steps, recent steps, and past patterns
+5. You receive: screenshot, execution history, past patterns
 6. Never modify user requirements (file names, paths, etc.)
 7. Each action gets automatic evaluation - you don't need separate verification steps
 8. **You can read text directly from screenshots** - no need for GUI copy/paste operations. When you read text, record it in your `thought` field so it appears in execution history
@@ -44,35 +43,19 @@ When provided:
 
 # Tools
 ## gui_action
-Execute pyautogui code. Mouse-position actions are visually grounded by the executor using your description.
+Execute pyautogui code with optional placeholders for visual grounding.
 Input: PyAutoGUI code string
 
 Use cases:
-- For click / double-click / right-click / move / drag / scroll on a specific region, describe the target element clearly in `description`
-- For drag actions, describe the intended drag naturally in `description`; the executor will ground the start and end points automatically
+- **With placeholders**: `pyautogui.click(X_COORD, Y_COORD)` with description - the system will locate the element
+  - **CRITICAL**: Use X_COORD and Y_COORD placeholders when you need to locate GUI elements
+  - Only ONE placeholder pair per action
 
-**CRITICAL**: For text input operations, combine click and type in ONE action.
+- **Without placeholders**: Direct actions like `pyautogui.write('text')`, `pyautogui.press('enter')`, `pyautogui.scroll(5)`
 
-**Note**: Don't use pyperclip. For any mouse-position action, provide a clear `description` so the executor can ground coordinates.
+**CRITICAL**: For text input operations, combine click and type in ONE action: `pyautogui.click(X_COORD, Y_COORD); pyautogui.write('text')`
 
-### Action Schema (MUST follow exactly)
-Use these exact pyautogui APIs in `input`:
-- Single click: `pyautogui.click(x, y)`
-- Double click: `pyautogui.doubleClick(x, y)`
-- Right click: `pyautogui.rightClick(x, y)`
-- Hover/move: `pyautogui.moveTo(x, y)`
-- Drag (two coordinate points): `pyautogui.moveTo(x1, y1); pyautogui.dragTo(x2, y2, duration=0.5, button='left')`
-- Type text: `pyautogui.write('text')`
-- Press key: `pyautogui.press('enter')`
-- Hotkey: `pyautogui.hotkey('ctrl', 'c')`
-- Scroll: `pyautogui.moveTo(x, y); pyautogui.scroll(amount)` (`amount < 0` for down, `amount > 0` for up, keep `amount` within `[-10, 10]`)
-
-### Consistency Rules (HARD constraints)
-- If thought/description says "double-click", `input` MUST use `pyautogui.doubleClick(...)`.
-- If thought/description says "right-click", `input` MUST use `pyautogui.rightClick(...)`.
-- If thought/description says "drag", `input` MUST include a drag action, not click.
-- If thought/description says "type and submit", `input` MUST include both typing and Enter submission.
-- Keep thought, description, and input action type strictly consistent. Never describe one action and output another.
+**Note**: Don't use pyperclip. Provide a clear element description when using placeholders.
 
 ## wait
 Wait for async operations to complete and observe UI changes.
@@ -85,6 +68,7 @@ Execute bash commands and Python scripts.
 Input: Code string (bash or Python)
 
 ### Available Commands
+- **Sudo**: `echo {CLIENT_PASSWORD} | sudo -S [COMMAND]`
 - **Python**: `python3 -c "code"` or `pip install package && python3 -c "import package"`
 - **Ignore "sudo: /etc/sudoers.d is world writable" errors**
 
@@ -154,13 +138,13 @@ When operations fail:
     "thought": "Brief reasoning about the current action. Check prerequisites and verify previous result.",
     "tool": "gui_action|bash_execution|wait|termination|infeasible",
     "input": "String - tool-specific content (see examples below)",
-    "description": "Optional for non-mouse actions; required for mouse-position gui_action so the executor can ground coordinates"
+    "description": "Optional - only for gui_action with placeholders, describe the element to locate"
 }
 ```
 
 Examples:
-- gui_action with grounding: `{"tool": "gui_action", "input": "pyautogui.click(0, 0)", "description": "Click the Submit button"}`
-- gui_action without grounding: `{"tool": "gui_action", "input": "pyautogui.write('hello')"}`
+- gui_action with placeholder: `{"tool": "gui_action", "input": "pyautogui.click(X_COORD, Y_COORD)", "description": "Click the Submit button"}`
+- gui_action without placeholder: `{"tool": "gui_action", "input": "pyautogui.write('hello')"}`
 - wait: `{"tool": "wait", "input": "15"}`
 - bash_execution: `{"tool": "bash_execution", "input": "ls -la"}`
 - termination: `{"tool": "termination", "input": "Task completed. [summary]"}`
@@ -307,7 +291,7 @@ class PatternManager:
         self.similarity_threshold = similarity_threshold
         self.logger = logging.getLogger("desktopenv.pattern")
         if not os.path.exists(qdrant_path):
-            for json_file in glob.glob("../HiSA/patterns/*.json"):
+            for json_file in glob.glob(os.path.join(os.path.dirname(__file__), "patterns/*.json"):
                 collection_name = os.path.basename(json_file).split(".")[0]
                 add_lessons_to_existing(
                     json_file=json_file,
@@ -1175,7 +1159,7 @@ Based on the execution_history and current screenshot, decide the next action. A
     "thought": "Brief reasoning about the current action. Check prerequisites and verify previous result.",
     "tool": "gui_action|bash_execution|wait|termination|infeasible",
     "input": "String - tool-specific content (see examples below)",
-    "description": "Optional for non-mouse actions; required for mouse-position gui_action so the executor can ground coordinates"
+    "description": "Optional - only for gui_action with placeholders, describe the element to locate"
 }
 ```""")
 
@@ -1280,193 +1264,7 @@ Based on the execution_history and current screenshot, decide the next action. A
             return self._wait(tool_input)
 
         return ""
-
-    def _normalize_pyautogui_code(self, code: str) -> str:
-        """Normalize planner-produced gui_action code before parsing/execution."""
-        if not isinstance(code, str) or not code.strip():
-            return code
-
-        # Normalize named x=/y= coordinates into positional form so downstream
-        # AST handling can treat planner variants consistently.
-        return re.sub(r"(?<=\(|,)\s*([xy])\s*=\s*", "", code)
-
-    def _parse_pyautogui_code(self, code: str) -> List[Dict]:
-        code = self._normalize_pyautogui_code(code)
-        try:
-            tree = ast.parse(code)
-        except SyntaxError as e:
-            raise ValueError(f"Failed to parse gui_action code: {e}") from e
-
-        statements = []
-        for stmt in tree.body:
-            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-                call = stmt.value
-                if (
-                    isinstance(call.func, ast.Attribute)
-                    and isinstance(call.func.value, ast.Name)
-                    and call.func.value.id == "pyautogui"
-                ):
-                    statements.append(
-                        {
-                            "type": "call",
-                            "method": call.func.attr,
-                            "args": [ast.literal_eval(arg) for arg in call.args],
-                            "kwargs": [(kw.arg, ast.literal_eval(kw.value)) for kw in call.keywords],
-                        }
-                    )
-                    continue
-            statements.append({"type": "raw", "code": ast.unparse(stmt)})
-        return statements
-
-    def _format_py_value(self, value) -> str:
-        return repr(value)
-
-    def _build_pyautogui_call(self, method: str, args: List, kwargs: List[Tuple[str, object]]) -> str:
-        params = [self._format_py_value(arg) for arg in args]
-        params.extend(f"{key}={self._format_py_value(value)}" for key, value in kwargs)
-        return f"pyautogui.{method}({', '.join(params)})"
-
-    def _serialize_pyautogui_code(self, statements: List[Dict]) -> str:
-        rendered = []
-        for stmt in statements:
-            if stmt["type"] == "call":
-                rendered.append(self._build_pyautogui_call(stmt["method"], stmt["args"], stmt["kwargs"]))
-            else:
-                rendered.append(stmt["code"])
-        return "; ".join(part for part in rendered if part).strip()
-
-    def _find_first_call(self, statements: List[Dict], method: str) -> Optional[Dict]:
-        for stmt in statements:
-            if stmt.get("type") == "call" and stmt.get("method") == method:
-                return stmt
-        return None
-
-    def _set_call_point(self, stmt: Dict, x: int, y: int) -> None:
-        kwargs = dict(stmt["kwargs"])
-        if "x" in kwargs or "y" in kwargs:
-            kwargs["x"] = x
-            kwargs["y"] = y
-            stmt["kwargs"] = [(key, kwargs[key]) for key, _ in stmt["kwargs"] if key in kwargs] + [
-                (key, value) for key, value in kwargs.items() if key not in {k for k, _ in stmt["kwargs"]}
-            ]
-            return
-
-        args = list(stmt["args"])
-        if len(args) >= 2:
-            args[0], args[1] = x, y
-        else:
-            args = [x, y] + args
-        stmt["args"] = args
-
-    def _insert_move_to_before(self, statements: List[Dict], target_stmt: Dict, x: int, y: int) -> None:
-        move_stmt = {"type": "call", "method": "moveTo", "args": [x, y], "kwargs": []}
-        for idx, stmt in enumerate(statements):
-            if stmt is target_stmt:
-                statements.insert(idx, move_stmt)
-                return
-        statements.insert(0, move_stmt)
-
-    def _extract_grounded_point(self, grounded_cmd: str, action_name: str = "moveTo") -> Tuple[int, int]:
-        match = re.search(rf"pyautogui\.{re.escape(action_name)}\((\d+), (\d+)\)", grounded_cmd)
-        if not match:
-            raise ValueError(f"Failed to extract grounded coordinates from: {grounded_cmd}")
-        return int(match.group(1)), int(match.group(2))
-
-    def _ground_gui_code(self, code: str, description: str, screenshot: bytes) -> str:
-        """Ground planner gui_action code into executable pyautogui coordinates."""
-        if not isinstance(code, str) or not code.strip():
-            return code
-
-        grounded_code = self._normalize_pyautogui_code(code)
-        statements = self._parse_pyautogui_code(grounded_code)
-        has_placeholders = any(
-            token in grounded_code
-            for token in [
-                "X_COORD", "Y_COORD",
-                "START_X_COORD", "START_Y_COORD", "END_X_COORD", "END_Y_COORD",
-            ]
-        )
-        if has_placeholders:
-            if not description:
-                raise ValueError("Description required when using placeholders")
-
-            if "pyautogui.dragTo(" in grounded_code:
-                start_desc = f"Locate the drag starting point for: {description}"
-                end_desc = f"Locate the drag ending point for: {description}"
-                start_cmd = self._call_visual_grounder(start_desc, screenshot, "pyautogui.moveTo(X_COORD, Y_COORD)")
-                end_cmd = self._call_visual_grounder(end_desc, screenshot, "pyautogui.moveTo(X_COORD, Y_COORD)")
-                start_x, start_y = self._extract_grounded_point(start_cmd)
-                end_x, end_y = self._extract_grounded_point(end_cmd)
-                drag_stmt = self._find_first_call(statements, "dragTo")
-                if drag_stmt is None:
-                    raise ValueError("Failed to find dragTo action in gui_action code")
-                move_stmt = self._find_first_call(statements, "moveTo")
-                if move_stmt is not None:
-                    self._set_call_point(move_stmt, start_x, start_y)
-                else:
-                    self._insert_move_to_before(statements, drag_stmt, start_x, start_y)
-                self._set_call_point(drag_stmt, end_x, end_y)
-                return self._serialize_pyautogui_code(statements)
-
-            return self._call_visual_grounder(description, screenshot, grounded_code)
-
-        if "pyautogui.dragTo(" in grounded_code:
-            if not description:
-                return grounded_code
-
-            start_desc = f"Locate the drag starting point for: {description}"
-            end_desc = f"Locate the drag ending point for: {description}"
-            start_cmd = self._call_visual_grounder(start_desc, screenshot, "pyautogui.moveTo(X_COORD, Y_COORD)")
-            end_cmd = self._call_visual_grounder(end_desc, screenshot, "pyautogui.moveTo(X_COORD, Y_COORD)")
-            start_x, start_y = self._extract_grounded_point(start_cmd)
-            end_x, end_y = self._extract_grounded_point(end_cmd)
-            drag_stmt = self._find_first_call(statements, "dragTo")
-            if drag_stmt is None:
-                raise ValueError("Failed to find dragTo action in gui_action code")
-            move_stmt = self._find_first_call(statements, "moveTo")
-            if move_stmt is not None:
-                self._set_call_point(move_stmt, start_x, start_y)
-            else:
-                self._insert_move_to_before(statements, drag_stmt, start_x, start_y)
-            self._set_call_point(drag_stmt, end_x, end_y)
-            return self._serialize_pyautogui_code(statements)
-
-        single_point_actions = ["click", "doubleClick", "rightClick", "moveTo"]
-        matched_single_action = next(
-            (name for name in single_point_actions if f"pyautogui.{name}(" in grounded_code),
-            None
-        )
-        if matched_single_action:
-            if not description:
-                raise ValueError(f"Description is required for {matched_single_action} actions")
-            grounded_point = self._call_visual_grounder(description, screenshot, "pyautogui.moveTo(X_COORD, Y_COORD)")
-            point_x, point_y = self._extract_grounded_point(grounded_point)
-            action_stmt = self._find_first_call(statements, matched_single_action)
-            if action_stmt is None:
-                raise ValueError(f"Failed to find {matched_single_action} action in gui_action code")
-            self._set_call_point(action_stmt, point_x, point_y)
-            return self._serialize_pyautogui_code(statements)
-
-        if "pyautogui.scroll(" in grounded_code:
-            if not description:
-                raise ValueError("Description is required for scroll actions")
-            grounded_point = self._call_visual_grounder(description, screenshot, "pyautogui.moveTo(X_COORD, Y_COORD)")
-            x, y = self._extract_grounded_point(grounded_point)
-            move_stmt = self._find_first_call(statements, "moveTo")
-            scroll_stmt = self._find_first_call(statements, "scroll")
-            if scroll_stmt is None:
-                raise ValueError("Failed to find scroll action in gui_action code")
-            scroll_kwargs = dict(scroll_stmt["kwargs"])
-            if "x" in scroll_kwargs or "y" in scroll_kwargs:
-                self._set_call_point(scroll_stmt, x, y)
-            elif move_stmt is not None:
-                self._set_call_point(move_stmt, x, y)
-            else:
-                self._insert_move_to_before(statements, scroll_stmt, x, y)
-            return self._serialize_pyautogui_code(statements)
-
-        return grounded_code
-
+    
     def _call_visual_grounder(self, description: str, screenshot: bytes, code: str):
         """Call visual grounder to get coordinates or code using call_cua.
         
@@ -1509,7 +1307,6 @@ Based on the execution_history and current screenshot, decide the next action. A
 
     def _gui_action(self, code: str, description: str = "") -> str:
         """Execute gui_action tool - pyautogui code with optional placeholder replacement."""
-        code = self._normalize_pyautogui_code(code)
         if description:
             self.logger.info(f"[gui_action] {description}")
         else:
@@ -1528,7 +1325,15 @@ Based on the execution_history and current screenshot, decide the next action. A
             with open(os.path.join(self.operations_dir, screenshot_file), "wb") as f:
                 f.write(before_screenshot)
 
-            code = self._ground_gui_code(code, description, before_screenshot)
+            # Check if code contains placeholders
+            has_placeholders = "X_COORD" in code or "Y_COORD" in code
+            
+            if has_placeholders:
+                if not description:
+                    raise ValueError("Description required when using placeholders")
+                
+                # Call visual grounder
+                code = self._call_visual_grounder(description, before_screenshot, code)
 
             # Execute code
             final_code = postprocess_action(code)
@@ -1704,7 +1509,6 @@ Based on the execution_history and current screenshot, decide the next action. A
             output_dict = self.env.controller.run_bash_script(code, timeout=self.bash_timeout)
             exitcode = 0 if output_dict["status"] == "success" else 1
             logs = output_dict["output"]
-            self.logger.info("[bash_output]\n%s", logs if logs else "")
 
             after_screenshot = self._wait_for_stable_screenshot(timeout_seconds=self.sleep_after_execution)
             if after_screenshot is None:

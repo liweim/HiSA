@@ -6,7 +6,7 @@ import os
 import shutil
 import textwrap
 from typing import Dict, List, Tuple
-from agents.hisa2 import HiSA
+from agents.hisa.hisa2 import HiSA
 import traceback
 from utils import save_args_to_settings, setup_logger
 
@@ -155,9 +155,6 @@ def config() -> argparse.Namespace:
     parser.add_argument("--rag_topk", type=int, default=4)
     parser.add_argument("--summarize_rag", action='store_true', help="Summarize RAG context")
     parser.add_argument("--rag_filename", type=str, default="retrieved_chunk_size_512_chunk_overlap_20_topk_4_embed_bge-large-en-v1.5.txt")
-    parser.add_argument("--pattern_dir", type=str, default="./qdrant_storage", help="Qdrant storage directory")
-    parser.add_argument("--use_qdrant_server", action="store_true", help="Use Qdrant server, otherwise use local file storage")
-    parser.add_argument("--qdrant_server_url", type=str, default="http://localhost:6333", help="Qdrant server URL")
 
     # Output config
     parser.add_argument("--result_dir", type=str, default="./results/dual_agent",
@@ -231,6 +228,7 @@ def process_single_task(
             screen_height=screen_height,
             sleep_after_execution=sleep_after_execution,
             max_steps=max_steps,
+            result_dir=result_dir,
             save_dir=save_dir,
             record=args.record,
             wo_pattern=args.wo_pattern,
@@ -238,9 +236,6 @@ def process_single_task(
             roi_margin=args.roi_margin,
             refine_period=args.refine_period,
             bash_timeout=args.bash_timeout,
-            pattern_dir=args.pattern_dir,
-            use_qdrant_server=args.use_qdrant_server,
-            qdrant_server_url=args.qdrant_server_url,
             wo_step=args.wo_step,
             wo_refinement=args.wo_refinement,
             sliding_window_size=args.sliding_window_size,
@@ -265,12 +260,16 @@ def process_single_task(
             with open(execution_log_path, "r") as f:
                 execution_log = json.load(f)
                 stats = execution_log.get("statistics", {})
+                total_steps = stats.get("total_steps", 0)
                 gui_ops = stats.get("cua_steps", 0)
                 code_ops = stats.get("coding_steps", 0)
+                wait_ops = stats.get("wait_steps", 0)
                 total_cost = stats.get("total_cost", 0)
 
                 logger.info(f"Task {domain}/{task_id} completed with score: {score}")
-                logger.info(f"Total operations: {gui_ops + code_ops} (GUI: {gui_ops}, Code: {code_ops})")
+                logger.info(
+                    f"Total operations: {total_steps} (GUI: {gui_ops}, Code: {code_ops}, Wait: {wait_ops})"
+                )
                 logger.info(f"Total cost: ${total_cost:.4f}")
         else:
             logger.info(f"Task {domain}/{task_id} completed with score: {score}")

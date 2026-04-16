@@ -10,11 +10,10 @@ import re
 import hashlib
 from typing import Any, Optional, Dict, List, Tuple
 from llm import AbstractLLM
-from utils import serialize_json, get_change_roi
+from utils import serialize_json, get_change_roi, postprocess_action
 from json_repair import repair_json
-from utils import postprocess_action
-from qdrant import QdrantManager, add_lessons_to_existing
-from embedding import EmbeddingClient
+from agents.hisa.qdrant import QdrantManager, add_lessons_to_existing
+from agents.hisa.embedding import EmbeddingClient
 from PIL import Image
 import io
 import time
@@ -364,7 +363,7 @@ class PatternManager:
         self.similarity_threshold = similarity_threshold
         self.logger = logging.getLogger("desktopenv.pattern")
         if not os.path.exists(qdrant_path):
-            for json_file in glob.glob("mm_agents/hisa/patterns/*.json"):
+            for json_file in glob.glob(os.path.join(os.path.dirname(__file__), "patterns/*.json"):
                 collection_name = os.path.basename(json_file).split(".")[0]
                 add_lessons_to_existing(
                     json_file=json_file,
@@ -2930,9 +2929,26 @@ except subprocess.TimeoutExpired as e:
             self.logger.error(f"Evaluation failed after {max_retries} attempts: {e}")
             score = 0.0
 
-        gui_steps = len([log for log in self.action_logs if log["type"] == "gui_action"])
-        bash_steps = len([log for log in self.action_logs if log["type"] == "bash_execution"])
-        wait_steps = len([log for log in self.action_logs if log["type"] == "wait"])
+        unique_logged_steps = {
+            int(log.get("step"))
+            for log in self.action_logs
+            if log.get("step") is not None
+        }
+        gui_steps = len({
+            int(log.get("step"))
+            for log in self.action_logs
+            if log.get("type") == "gui_action" and log.get("step") is not None
+        })
+        bash_steps = len({
+            int(log.get("step"))
+            for log in self.action_logs
+            if log.get("type") == "bash_execution" and log.get("step") is not None
+        })
+        wait_steps = len({
+            int(log.get("step"))
+            for log in self.action_logs
+            if log.get("type") == "wait" and log.get("step") is not None
+        })
 
         global_planner_cost, global_planner_prompt, global_planner_completion, global_planner_images = self.global_planner_llm.get_usage()
         visual_grounder_cost, visual_grounder_prompt, visual_grounder_completion, visual_grounder_images = self.visual_grounder_llm.get_usage()
@@ -2955,7 +2971,7 @@ except subprocess.TimeoutExpired as e:
         execution_log = {
             "statistics": {
                 "score": score,
-                "total_steps": self.operation_count,
+                "total_steps": len(unique_logged_steps),
                 "cua_steps": gui_steps,
                 "coding_steps": bash_steps,
                 "wait_steps": wait_steps,

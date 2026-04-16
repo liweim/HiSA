@@ -7,7 +7,6 @@ when_to_use: Load when the planner should interact through the visible GUI
 
 # Skill: GUI Interaction
 
-- Current planning mode: GUI-first. Prefer `gui_action` for the next decision unless the current screenshot clearly shows that shell work is the more reliable path.
 - Use this skill when the visible interface is the main source of truth or when shell-side edits are brittle.
 - Prefer short, purposeful `gui_action` sequences over one-click micro-steps when the sequence is stable.
 - You may output multiple `pyautogui` statements in one `input`. The executor will parse them one by one, ground each mouse-position action before executing it, and use a fresh screenshot before the next sub-action.
@@ -15,7 +14,6 @@ when_to_use: Load when the planner should interact through the visible GUI
 - Every grounded mouse-position action should carry a local `# comment`. If one `gui_action` contains multiple grounded mouse-position actions, provide per-action comments rather than relying on `thought`.
 - If a text field is clearly identifiable, combine focus and typing in one `gui_action`.
 - Use `wait` only for real async delays; do not replace ordinary observation steps with blind waiting.
-- If this GUI-first path becomes blocked, the system may switch modes on the next planning round.
 - Before `termination`, do one explicit verification action that inspects the requested final state.
 
 ### GUI action schema

@@ -6,7 +6,7 @@ import os
 import shutil
 import textwrap
 from typing import Dict, List, Tuple
-from agents.hisa_adapt import HiSA
+from agents.hisa.hisa_adapt import HiSA
 import traceback
 from utils import save_args_to_settings, setup_logger
 
