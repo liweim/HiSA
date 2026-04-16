@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 import os
 import glob
 import shutil
-from embedding import EmbeddingClient
+from agents.hisa.embedding import EmbeddingClient
 import json
 
 class QdrantManager:

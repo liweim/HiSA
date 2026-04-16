@@ -9,7 +9,7 @@ from tqdm import tqdm
 import traceback
 from agents.gta1_agent import GTA1Agent
 from agents.run_single import run_single_example
-from utils import setup_logger, save_args_to_settings, build_additional_contexts, summary
+from agents.utils import setup_logger, save_args_to_settings, build_additional_contexts, summary
 
 def config() -> argparse.Namespace:
     from desktop_env.desktop_env import DesktopEnv

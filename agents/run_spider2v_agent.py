@@ -10,7 +10,7 @@ import traceback
 from typing import List, Tuple, Dict, Any, Optional
 from tqdm import tqdm
 from agents.spider2v_agent import PromptAgent
-from utils import summary, save_args_to_settings, setup_logger
+from agents.utils import summary, save_args_to_settings, setup_logger
 
 
 def get_retrieved_context(config_path: str, topk: int = 4, file_name: str = "retrieved_chunk_size_512_chunk_overlap_20_topk_4_embed_bge-large-en-v1.5.txt") -> str:

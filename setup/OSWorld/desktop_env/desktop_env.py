@@ -21,6 +21,16 @@ Metric = Callable[[Any, Any], float]
 Getter = Callable[[gym.Env, Dict[str, Any]], Any]
 
 MAX_RETRIES = 5 # Maximum retries for environment setup
+DOCKER_GUEST_PYTHON_PACKAGES = [
+    "openpyxl",
+    "pandas",
+    "odfpy",
+    "xlrd",
+    "python-docx",
+    "lxml",
+    "pyxlsb",
+    "xlsxwriter",
+]
             
 
 
@@ -194,6 +204,7 @@ class DesktopEnv(gym.Env):
         self._traj_no: int = -1
         self._step_no: int = 0
         self.action_history: List[Dict[str, any]] = []
+        self._guest_python_deps_ready = False
 
 
     def _start_emulator(self):
@@ -212,6 +223,7 @@ class DesktopEnv(gym.Env):
                 self.vlc_port = int(vm_ip_ports[4])
             self.controller = PythonController(vm_ip=self.vm_ip, server_port=self.server_port)
             self.setup_controller = SetupController(vm_ip=self.vm_ip, server_port=self.server_port, chromium_port=self.chromium_port, vlc_port=self.vlc_port, cache_dir=self.cache_dir_base, client_password=self.client_password, screen_width=self.screen_width, screen_height=self.screen_height)
+            self._guest_python_deps_ready = False
 
         except Exception as e:
             try:
@@ -219,6 +231,38 @@ class DesktopEnv(gym.Env):
             except Exception as stop_err:
                 logger.warning(f"Cleanup after interrupt failed: {stop_err}")
             raise
+
+    def _ensure_guest_python_deps(self):
+        if self.provider_name != "docker" or self._guest_python_deps_ready:
+            return
+
+        install_script = (
+            "set -e\n"
+            "python3 -m pip install --user " + " ".join(DOCKER_GUEST_PYTHON_PACKAGES)
+        )
+        logger.info(
+            "Installing default Python packages inside docker guest VM: %s",
+            ", ".join(DOCKER_GUEST_PYTHON_PACKAGES),
+        )
+        result = self.controller.run_bash_script(
+            install_script,
+            timeout=900,
+            working_dir="~",
+        )
+        result = result or {}
+        status = result.get("status", "")
+        returncode = int(result.get("returncode", -1))
+        output = str(result.get("output", "") or "")
+        error = str(result.get("error", "") or "")
+        if status == "success" and returncode == 0:
+            self._guest_python_deps_ready = True
+            logger.info("Docker guest Python dependency installation completed successfully.")
+            return
+
+        raise RuntimeError(
+            "Failed to install default Python packages inside docker guest VM. "
+            f"status={status}, returncode={returncode}, output={output}, error={error}"
+        )
 
     def _revert_to_snapshot(self):
         # Revert to certain snapshot of the virtual machine, and refresh the path to vm and ip of vm
@@ -298,6 +342,8 @@ class DesktopEnv(gym.Env):
                         logger.warning(f"Best-effort stop before restart failed: {stop_err}")
                     self._start_emulator()
                     logger.info("Emulator restarted after failed readiness check.")
+
+            self._ensure_guest_python_deps()
 
             if task_config is not None:
                 if task_config.get("proxy", False) and self.enable_proxy:

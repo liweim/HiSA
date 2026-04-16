@@ -5,9 +5,9 @@ import logging
 import os
 import shutil
 from typing import Dict, List, Tuple
-from agents.hisa import HiSA
+from agents.hisa.hisa import HiSA
 import traceback
-from utils import build_additional_contexts, summary, save_args_to_settings, setup_logger
+from agents.utils import build_additional_contexts, summary, save_args_to_settings, setup_logger
 
 def config() -> argparse.Namespace:
     from desktop_env.desktop_env import DesktopEnv
@@ -169,12 +169,17 @@ def process_single_task(
             with open(execution_log_path, "r") as f:
                 execution_log = json.load(f)
                 stats = execution_log.get("statistics", {})
+                total_steps = stats.get("total_steps", 0)
                 gui_ops = stats.get("cua_steps", 0)
                 code_ops = stats.get("coding_steps", 0)
+                wait_ops = stats.get("wait_steps", 0)
+                other_ops = total_steps - gui_ops - code_ops - wait_ops
                 total_cost = stats.get("total_cost", 0)
 
                 logger.info(f"Task {domain}/{task_id} completed with score: {score}")
-                logger.info(f"Total operations: {gui_ops + code_ops} (GUI: {gui_ops}, Code: {code_ops})")
+                logger.info(
+                    f"Total operations: {total_steps} (GUI: {gui_ops}, Code: {code_ops}, Wait: {wait_ops}, Others: {other_ops})"
+                )
                 logger.info(f"Total cost: ${total_cost:.4f}")
         else:
             logger.info(f"Task {domain}/{task_id} completed with score: {score}")

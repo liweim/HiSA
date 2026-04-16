@@ -16,7 +16,7 @@ from gui_agents.s2.utils.common_utils import (
     sanitize_code,
     extract_first_agent_function,
 )
-from llm import UsageStats
+from agents.llm import UsageStats
 
 logger = logging.getLogger("desktopenv.agent")
 

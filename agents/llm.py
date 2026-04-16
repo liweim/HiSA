@@ -16,7 +16,7 @@ import math
 import re
 import ast
 from io import BytesIO
-from utils import smart_resize
+from agents.utils import smart_resize
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", None)
 LOCAL_API_KEY = ""

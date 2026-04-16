@@ -24,7 +24,7 @@ from google.api_core.exceptions import (
 from requests.exceptions import SSLError
 import os
 from agents.gta1_prompts import GTA1_PLANNER_SYSTEM_PROMPT, GTA1_GROUNDING_SYSTEM_PROMPT, GTA1_JUDGE_SYSTEM_PROMPT
-from utils import get_price, smart_resize
+from agents.utils import get_price, smart_resize
 from pytesseract import Output
 import pytesseract
 import inspect

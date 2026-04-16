@@ -8,16 +8,16 @@ import logging
 import textwrap
 import subprocess
 
-BENCH_ROOT = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(BENCH_ROOT, "../.."))
+OSWORLD_ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(OSWORLD_ROOT, "../.."))
 
-for path in (PROJECT_ROOT, BENCH_ROOT):
+for path in (PROJECT_ROOT, OSWORLD_ROOT):
     if path not in sys.path:
         sys.path.insert(0, path)
 
 from desktop_env.desktop_env import DesktopEnv
 
-from utils import summary, setup_logger
+from agents.utils import summary, setup_logger
 
 # Global variables
 logger = None  # Will be initialized in run()
@@ -422,16 +422,10 @@ def run():
         from agents.run_coact import run
     elif args.method == "agents3":
         from agents.run_agents3 import run
-    elif args.method == "hisa":
-        from agents.run_hisa import run
-    elif args.method == "hisa1":
-        from agents.run_hisa1 import run
-    elif args.method == "hisa2":
-        from agents.run_hisa2 import run
-    elif args.method == "hisa3":
-        from agents.run_hisa3 import run
     elif args.method == "gta1":
         from agents.run_gta1_agent import run
+    elif args.method == "hisa":
+        from agents.run_hisa import run
     else:
         raise ValueError(f"Invalid method: {args.method}")
     

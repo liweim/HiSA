@@ -172,7 +172,7 @@ def floor_by_factor(number: int, factor: int) -> int:
 
 
 def get_price(model: str) -> Tuple[float, float]:
-    from llm import MODEL_CONFIGS
+    from agents.llm import MODEL_CONFIGS
 
     # Handle unknown models gracefully
     if model not in MODEL_CONFIGS:
@@ -785,7 +785,9 @@ def summary(result_dir, test_all_meta):
             "score": [],
             "cost": [],
             "gui_steps": [],
+            "mcp_steps": [],
             "code_steps": [],
+            "other_steps": [],
             "total_steps": [],
             "execution_time": [],
             "prompt_tokens": [],
@@ -847,12 +849,27 @@ def summary(result_dir, test_all_meta):
                     execution_time = execution_stats.get("execution_time", 0)
                     
                     # Extract step data
-                    if "cua_steps" in execution_stats:
+                    if "total_steps" in execution_stats:
+                        total_task_steps = execution_stats.get("total_steps", 0)
                         gui_steps = execution_stats.get("cua_steps", 0)
+                        mcp_steps = execution_stats.get("mcp_steps", 0)
                         code_steps = execution_stats.get("coding_steps", 0)
+                        other_steps = execution_stats.get(
+                            "other_steps",
+                            max(0, total_task_steps - gui_steps - mcp_steps - code_steps),
+                        )
+                    elif "cua_steps" in execution_stats:
+                        gui_steps = execution_stats.get("cua_steps", 0)
+                        mcp_steps = execution_stats.get("mcp_steps", 0)
+                        code_steps = execution_stats.get("coding_steps", 0)
+                        total_task_steps = gui_steps + mcp_steps + code_steps
+                        other_steps = execution_stats.get("other_steps", 0)
                     else:
                         gui_steps = execution_stats.get("total_steps", 0)
+                        mcp_steps = execution_stats.get("mcp_steps", 0)
                         code_steps = 0
+                        total_task_steps = gui_steps + mcp_steps + code_steps
+                        other_steps = execution_stats.get("other_steps", 0)
 
                     # Accumulate Model Usage
                     local_model_usage = execution_stats.get("model_usage", {})
@@ -876,13 +893,14 @@ def summary(result_dir, test_all_meta):
                     
                     stats[domain]["cost"].append(cost)
                     stats[domain]["gui_steps"].append(gui_steps)
+                    stats[domain]["mcp_steps"].append(mcp_steps)
                     stats[domain]["code_steps"].append(code_steps)
-                    stats[domain]["total_steps"].append(gui_steps + code_steps)
+                    stats[domain]["other_steps"].append(other_steps)
+                    stats[domain]["total_steps"].append(total_task_steps)
                     stats[domain]["execution_time"].append(execution_time)
                     stats[domain]["prompt_tokens"].append(prompt_tokens)
                     stats[domain]["completion_tokens"].append(completion_tokens)
                     stats[domain]["image_counts"].append(image_count)
-                    total_task_steps = gui_steps + code_steps
                     if total_task_steps <= 50:
                         score_50 = score
                     all_scores_50.append(score_50)
@@ -909,10 +927,18 @@ def summary(result_dir, test_all_meta):
     total_gui_steps = sum(
         sum(stats[domain]["gui_steps"]) for domain in stats
     )
+    total_mcp_steps = sum(
+        sum(stats[domain]["mcp_steps"]) for domain in stats
+    )
     total_code_steps = sum(
         sum(stats[domain]["code_steps"]) for domain in stats
     )
-    total_steps = total_gui_steps + total_code_steps
+    total_other_steps = sum(
+        sum(stats[domain]["other_steps"]) for domain in stats
+    )
+    total_steps = sum(
+        sum(stats[domain]["total_steps"]) for domain in stats
+    )
     total_prompt_tokens = sum(all_prompt_tokens)
     total_completion_tokens = sum(all_completion_tokens)
     total_tokens = total_prompt_tokens + total_completion_tokens
@@ -923,7 +949,9 @@ def summary(result_dir, test_all_meta):
     avg_cost = total_cost / num_tasks_with_log if num_tasks_with_log > 0 else 0
     avg_steps = total_steps / num_tasks_with_log if num_tasks_with_log > 0 else 0
     avg_gui_steps = total_gui_steps / num_tasks_with_log if num_tasks_with_log > 0 else 0
+    avg_mcp_steps = total_mcp_steps / num_tasks_with_log if num_tasks_with_log > 0 else 0
     avg_code_steps = total_code_steps / num_tasks_with_log if num_tasks_with_log > 0 else 0
+    avg_other_steps = total_other_steps / num_tasks_with_log if num_tasks_with_log > 0 else 0
     avg_prompt_tokens = total_prompt_tokens / num_tasks_with_log if num_tasks_with_log > 0 else 0
     avg_completion_tokens = total_completion_tokens / num_tasks_with_log if num_tasks_with_log > 0 else 0
     avg_total_tokens = total_tokens / num_tasks_with_log if num_tasks_with_log > 0 else 0
@@ -947,7 +975,9 @@ def summary(result_dir, test_all_meta):
                 "image_counts": total_image_counts,
                 "steps": total_steps,
                 "cua_steps": total_gui_steps,
+                "mcp_steps": total_mcp_steps,
                 "code_steps": total_code_steps,
+                "other_steps": total_other_steps,
                 "execution_time": total_execution_times,
             },
             "average": {
@@ -960,7 +990,9 @@ def summary(result_dir, test_all_meta):
                 "image_counts": avg_image_counts,
                 "steps": avg_steps,
                 "cua_steps": avg_gui_steps,
+                "mcp_steps": avg_mcp_steps,
                 "code_steps": avg_code_steps,
+                "other_steps": avg_other_steps,
                 "execution_time": avg_execution_time,
             },
             "domain_score": {
@@ -984,7 +1016,9 @@ def summary(result_dir, test_all_meta):
                 "image_counts": np.mean(stats[domain]["image_counts"]) if len(stats[domain]["image_counts"]) > 0 else 0,
                 "steps": np.mean(stats[domain]["total_steps"]) if len(stats[domain]["total_steps"]) > 0 else 0,
                 "cua_steps": np.mean(stats[domain]["gui_steps"]) if len(stats[domain]["gui_steps"]) > 0 else 0,
+                "mcp_steps": np.mean(stats[domain]["mcp_steps"]) if len(stats[domain]["mcp_steps"]) > 0 else 0,
                 "code_steps": np.mean(stats[domain]["code_steps"]) if len(stats[domain]["code_steps"]) > 0 else 0,
+                "other_steps": np.mean(stats[domain]["other_steps"]) if len(stats[domain]["other_steps"]) > 0 else 0,
                 "execution_time": np.mean(stats[domain]["execution_time"]) if len(stats[domain]["execution_time"]) > 0 else 0,
             }
             for domain in test_all_meta
@@ -996,7 +1030,6 @@ def summary(result_dir, test_all_meta):
 
     summary_stats = detailed_stats['summary']
     # print(json.dumps(summary_stats, indent=2, ensure_ascii=False))
-
     total_tasks = summary_stats['total_tasks']
     left_tasks = summary_stats['left_tasks']
     error_tasks = summary_stats['error_tasks']
@@ -1013,3 +1046,6 @@ def summary(result_dir, test_all_meta):
     print(f"method, score, score_50, cost, tokens, prompt_tokens, completion_tokens, steps, execution_time:\n{os.path.basename(result_dir)},{avg_score:.2f},{avg_score_50:.2f},{avg_cost:.2f},{avg_total_tokens:.2f},{avg_prompt_tokens:.2f},{avg_completion_tokens:.2f},{avg_steps:.2f},{avg_execution_time:.2f}")
     print('*'*100)
     return detailed_stats
+
+if __name__ == "__main__":
+    summary('results/hisa4_qwen3.5-9b', 'benchmarks/OSWorld/evaluation_examples/test_few.json')

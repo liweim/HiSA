@@ -5,13 +5,13 @@ import os
 import logging
 import traceback
 from typing import Optional, Dict, List
-from llm import AbstractLLM
-from utils import serialize_json, get_change_roi
+from agents.llm import AbstractLLM
+from agents.utils import serialize_json, get_change_roi
 from json_repair import repair_json
-from utils import postprocess_action
+from agents.utils import postprocess_action
 import re
-from qdrant import QdrantManager, add_lessons_to_existing
-from embedding import EmbeddingClient
+from agents.hisa.qdrant import QdrantManager, add_lessons_to_existing
+from agents.hisa.embedding import EmbeddingClient
 from PIL import Image
 import io
 import time
@@ -291,7 +291,7 @@ class PatternManager:
         self.similarity_threshold = similarity_threshold
         self.logger = logging.getLogger("desktopenv.pattern")
         if not os.path.exists(qdrant_path):
-            for json_file in glob.glob("../HiSA/patterns/*.json"):
+            for json_file in glob.glob(os.path.join(os.path.dirname(__file__), "patterns/*.json")):
                 collection_name = os.path.basename(json_file).split(".")[0]
                 add_lessons_to_existing(
                     json_file=json_file,
@@ -339,7 +339,7 @@ class PatternManager:
         try:
             self._ensure_collection(domain)
 
-            # Get current max ID from Qdrant
+            # Get current max ID from agents.hisa.qdrant
             try:
                 count = self.qdrant.count_points(domain)
                 all_points = self.qdrant.scroll_all(domain, limit=1000, with_vectors=False)
@@ -837,15 +837,16 @@ class HiSA:
         additional_context: Optional[str] = None,
     ) -> float:
         """Execute task using tool-calling loop."""
-        
-        # Record start time for execution time tracking
-        self.start_time = time.time()
 
         # Reset state
         self.global_planner_llm.reset_stats()
         self.visual_grounder_llm.reset_stats()
         self.state_manager_llm.reset_stats()
         self.env.reset(task_config=task_config)
+        
+        # Record start time after environment reset so provisioning work
+        # such as docker guest dependency installation is excluded.
+        self.start_time = time.time()
         self.operation_count = 0
         self.action_logs = []
         self.last_full_summary = None

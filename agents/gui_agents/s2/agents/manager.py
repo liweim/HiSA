@@ -16,7 +16,7 @@ from gui_agents.s2.utils.common_utils import (
     call_llm_safe,
     parse_dag,
 )
-from llm import UsageStats
+from agents.llm import UsageStats
 
 logger = logging.getLogger("desktopenv.agent")
 
