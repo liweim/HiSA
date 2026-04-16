@@ -12,7 +12,7 @@ from tqdm import tqdm
 from agents.run_single import run_single_example
 from agents.gui_agents.s3.agents.agent_s import AgentS3
 from agents.gui_agents.s3.agents.grounding import OSWorldACI
-from utils import summary, save_args_to_settings, build_additional_contexts, setup_logger
+from agents.utils import summary, save_args_to_settings, build_additional_contexts, setup_logger
 from dotenv import load_dotenv
 
 load_dotenv()

@@ -1,5 +1,9 @@
 # HiSA: Hierarchical State Abstraction for Scalable GUI Agents
 
+## Updates
+
+- 2026-04-06: Accepted by ACL 2026 Findings 🎉
+
 This repository contains the code for the paper *HiSA: Hierarchical State Abstraction for Scalable GUI Agents*
 
 ## 📖 Introduction

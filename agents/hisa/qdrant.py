@@ -1,5 +1,5 @@
-from qdrant_client import QdrantClient
-from qdrant_client.models import (
+from agents.hisa.qdrant_client import QdrantClient
+from agents.hisa.qdrant_client.models import (
     Distance, 
     VectorParams, 
     PointStruct, 
@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 import os
 import glob
 import shutil
-from embedding import EmbeddingClient
+from agents.hisa.embedding import EmbeddingClient
 import json
 
 class QdrantManager:

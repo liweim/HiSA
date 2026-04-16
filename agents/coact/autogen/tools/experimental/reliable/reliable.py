@@ -202,7 +202,7 @@ def _configure_llm_for_structured_output(
 
         if removed_keys:
             logger.debug(
-                "Removed conflicting keys %s from LLM config for structured output (response_format=%s)",
+                "Removed conflicting keys %s from agents.llm config for structured output (response_format=%s)",
                 removed_keys,
                 structured_output_type.__name__,
             )
@@ -810,10 +810,10 @@ class ReliableTool(Tool):
     ) -> Union[dict[str, Any], str]:
         if not isinstance(message, str):
             logger.error(
-                f"Validator Hook: Expected a JSON string message from LLM, but got {type(message)}. Content: {str(message)[:200]}"
+                f"Validator Hook: Expected a JSON string message from agents.llm, but got {type(message)}. Content: {str(message)[:200]}"
             )
             # This indicates a misconfiguration or unexpected LLM output format.
-            raise TypeError(f"Validator hook expected str from LLM, got {type(message)}")
+            raise TypeError(f"Validator hook expected str from agents.llm, got {type(message)}")
 
         validation_result_obj: ValidationResult = ValidationResult.model_validate_json(message)
         status = "PASSED" if validation_result_obj.validation_result else "FAILED"

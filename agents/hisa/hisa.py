@@ -5,10 +5,10 @@ import os
 import logging
 import traceback
 from typing import Optional, Dict, List
-from llm import AbstractLLM
-from utils import serialize_json, get_change_roi
+from agents.llm import AbstractLLM
+from agents.utils import serialize_json, get_change_roi
 from json_repair import repair_json
-from utils import postprocess_action
+from agents.utils import postprocess_action
 import re
 from agents.hisa.qdrant import QdrantManager, add_lessons_to_existing
 from agents.hisa.embedding import EmbeddingClient
@@ -291,7 +291,7 @@ class PatternManager:
         self.similarity_threshold = similarity_threshold
         self.logger = logging.getLogger("desktopenv.pattern")
         if not os.path.exists(qdrant_path):
-            for json_file in glob.glob(os.path.join(os.path.dirname(__file__), "patterns/*.json"):
+            for json_file in glob.glob(os.path.join(os.path.dirname(__file__), "patterns/*.json")):
                 collection_name = os.path.basename(json_file).split(".")[0]
                 add_lessons_to_existing(
                     json_file=json_file,
@@ -339,7 +339,7 @@ class PatternManager:
         try:
             self._ensure_collection(domain)
 
-            # Get current max ID from Qdrant
+            # Get current max ID from agents.hisa.qdrant
             try:
                 count = self.qdrant.count_points(domain)
                 all_points = self.qdrant.scroll_all(domain, limit=1000, with_vectors=False)

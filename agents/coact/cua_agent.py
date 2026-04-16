@@ -10,7 +10,7 @@ import io
 import openai
 from openai import OpenAI  # pip install --upgrade openai>=1.66.2
 from configs.config import OPENAI_API_KEY
-from utils import get_price
+from agents.utils import get_price
 
 logger = logging.getLogger("desktopenv")
 

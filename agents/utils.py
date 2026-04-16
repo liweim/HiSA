@@ -172,7 +172,7 @@ def floor_by_factor(number: int, factor: int) -> int:
 
 
 def get_price(model: str) -> Tuple[float, float]:
-    from llm import MODEL_CONFIGS
+    from agents.llm import MODEL_CONFIGS
 
     # Handle unknown models gracefully
     if model not in MODEL_CONFIGS:
@@ -1048,4 +1048,4 @@ def summary(result_dir, test_all_meta):
     return detailed_stats
 
 if __name__ == "__main__":
-    summary('results/hisa3_qwen3.5-9b', 'benchmarks/OSWorld/evaluation_examples/test_few.json')
+    summary('results/hisa4_qwen3.5-9b', 'benchmarks/OSWorld/evaluation_examples/test_few.json')

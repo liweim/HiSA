@@ -16,7 +16,7 @@ from gui_agents.s3.utils.formatters import (
     SINGLE_ACTION_FORMATTER,
     CODE_VALID_FORMATTER,
 )
-from llm import UsageStats
+from agents.llm import UsageStats
 
 logger = logging.getLogger("desktopenv.agent")
 

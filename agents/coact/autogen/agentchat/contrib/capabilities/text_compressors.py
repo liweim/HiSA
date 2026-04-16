@@ -10,7 +10,7 @@ from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block() as result:
     import llmlingua
-    from llmlingua import PromptCompressor
+    from agents.llmlingua import PromptCompressor
 
 
 class TextCompressor(Protocol):

@@ -347,8 +347,8 @@ Keep the summary under 150 words and use clear, factual language.
             summary = call_llm_safe(summary_agent, temperature=1)
 
             if not summary or summary.strip() == "":
-                summary = "Summary generation failed - no response from LLM"
-                logger.warning("Summary generation failed - empty response from LLM")
+                summary = "Summary generation failed - no response from agents.llm"
+                logger.warning("Summary generation failed - empty response from agents.llm")
 
         except Exception as e:
             summary = f"Summary generation failed: {str(e)}"

@@ -14,7 +14,7 @@ from gui_agents.s2.utils.common_utils import (
     call_llm_safe,
     parse_single_code_from_string,
 )
-from utils import CUA_SYSTEM_PROMPT
+from agents.utils import CUA_SYSTEM_PROMPT
 
 
 class ACI:

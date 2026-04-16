@@ -18,7 +18,7 @@ from agents.gui_agents.s2.agents.grounding import OSWorldACI
 from tqdm import tqdm
 
 from agents.run_single import run_single_example
-from utils import summary, save_args_to_settings, setup_logger, build_additional_contexts
+from agents.utils import summary, save_args_to_settings, setup_logger, build_additional_contexts
 
 
 def config() -> argparse.Namespace:

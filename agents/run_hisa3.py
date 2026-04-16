@@ -8,7 +8,7 @@ import textwrap
 from typing import Dict, List, Tuple
 from agents.hisa.hisa3 import HiSA
 import traceback
-from utils import save_args_to_settings, setup_logger
+from agents.utils import save_args_to_settings, setup_logger
 
 
 def str2bool(value):

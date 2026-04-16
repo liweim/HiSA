@@ -11,7 +11,7 @@ from gui_agents.s3.memory.procedural_memory import PROCEDURAL_MEMORY
 from gui_agents.s3.core.mllm import LMMAgent
 from gui_agents.s3.utils.common_utils import call_llm_safe
 from gui_agents.s3.agents.code_agent import CodeAgent
-from utils import CUA_SYSTEM_PROMPT
+from agents.utils import CUA_SYSTEM_PROMPT
 import logging
 
 logger = logging.getLogger("desktopenv.agent")

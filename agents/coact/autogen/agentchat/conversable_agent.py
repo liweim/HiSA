@@ -3340,7 +3340,7 @@ class ConversableAgent(LLMAgent):
 
         Args:
             func_sig (str or dict): description/name of the function to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat/create-functions
-            is_remove: whether removing the function from llm_config with name 'func_sig'
+            is_remove: whether removing the function from agents.llm_config with name 'func_sig'
             silent_override: whether to print warnings when overriding functions.
 
         Deprecated as of [OpenAI API v1.1.0](https://github.com/openai/openai-python/releases/tag/v1.1.0)
@@ -3393,7 +3393,7 @@ class ConversableAgent(LLMAgent):
 
         Args:
             tool_sig (str or dict): description/name of the tool to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat-create-tools
-            is_remove: whether removing the tool from llm_config with name 'tool_sig'
+            is_remove: whether removing the tool from agents.llm_config with name 'tool_sig'
             silent_override: whether to print warnings when overriding functions.
         """
         if not self.llm_config:

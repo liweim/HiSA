@@ -10,8 +10,8 @@ from openai import (
     RateLimitError,
 )
 
-from llm import UsageStats, MODEL_CONFIGS
-from utils import count_images_in_messages, call_computer_use_api
+from agents.llm import UsageStats, MODEL_CONFIGS
+from agents.utils import count_images_in_messages, call_computer_use_api
 
 
 class LMMEngine:

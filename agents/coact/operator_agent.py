@@ -15,7 +15,7 @@ from .autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalCo
 
 from .cua_agent import run_cua
 from .coding_agent import TerminalProxyAgent, CODER_SYSTEM_MESSAGE
-from utils import get_price
+from agents.utils import get_price
 
 ONLY_CUA = False  # False update
 

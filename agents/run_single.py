@@ -5,7 +5,7 @@ import os
 import time
 from typing import *
 from wrapt_timeout_decorator import *
-from utils import serialize_json
+from agents.utils import serialize_json
 
 logger = logging.getLogger("desktopenv.experiment")
 
