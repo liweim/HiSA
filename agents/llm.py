@@ -18,6 +18,7 @@ import ast
 from io import BytesIO
 from agents.utils import smart_resize
 
+# from configs.config import OPENAI_API_KEY
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", None)
 LOCAL_API_KEY = ""
 LOCAL_API_URL = "http://127.0.0.1"

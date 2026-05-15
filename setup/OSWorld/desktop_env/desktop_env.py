@@ -343,7 +343,7 @@ class DesktopEnv(gym.Env):
                     self._start_emulator()
                     logger.info("Emulator restarted after failed readiness check.")
 
-            self._ensure_guest_python_deps()
+            # self._ensure_guest_python_deps()
 
             if task_config is not None:
                 if task_config.get("proxy", False) and self.enable_proxy:

@@ -7,7 +7,7 @@ import shutil
 from typing import Dict, List, Tuple
 from agents.hisa.hisa import HiSA
 import traceback
-from agents.utils import build_additional_contexts, summary, save_args_to_settings, setup_logger
+from agents.utils import build_additional_contexts, save_args_to_settings, setup_logger
 
 def config() -> argparse.Namespace:
     from desktop_env.desktop_env import DesktopEnv
