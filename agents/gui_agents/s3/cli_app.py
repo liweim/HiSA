@@ -11,9 +11,9 @@ import time
 
 from PIL import Image
 
-from gui_agents.s3.agents.grounding import OSWorldACI
-from gui_agents.s3.agents.agent_s import AgentS3
-from gui_agents.s3.utils.local_env import LocalEnv
+from agents.gui_agents.s3.agents.grounding import OSWorldACI
+from agents.gui_agents.s3.agents.agent_s import AgentS3
+from agents.gui_agents.s3.utils.local_env import LocalEnv
 
 current_platform = platform.system().lower()
 

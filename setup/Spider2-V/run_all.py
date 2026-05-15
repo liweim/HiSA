@@ -131,19 +131,19 @@ def _attach_resolution_guard(env, width: int, height: int, logger: logging.Logge
 def run():
     parser = argparse.ArgumentParser(description="Run evaluation for agent framework")
 
-    # ==================== Common Arguments (used by all methods) ====================
+    # ==================== Method Selector ====================
     parser.add_argument(
         "--method", type=str, default="hisa", help="Method to use"
     )
 
-    # Environment config
+    # ==================== Environment Arguments ====================
     parser.add_argument(
         "--path_to_vm",
         type=str,
         default="./vmware_vm_data/Ubuntu0/Ubuntu0.vmx",
         help="Path to VM file",
     )
-    parser.add_argument("--snapshot_name", type=str, default="low_res")
+    parser.add_argument("--snapshot_name", type=str, default="init_state")
     parser.add_argument("--screen_width", type=int, default=1280)
     parser.add_argument("--screen_height", type=int, default=720)
     parser.add_argument("--sleep_after_execution", type=float, default=0.5)
@@ -164,7 +164,7 @@ def run():
         help="Observation type",
     )
 
-    # Task/example config
+    # ==================== Task Arguments ====================
     parser.add_argument("--domain", type=str, default="all")
     parser.add_argument(
         "--test_all_meta_path",
@@ -180,7 +180,7 @@ def run():
     parser.add_argument("--rerun_fail", action="store_true", help="Rerun failed tests")
     parser.add_argument("--get_score", action="store_true", help="Get scores")
 
-    # Output/logging config
+    # ==================== Output Arguments ====================
     parser.add_argument(
         "--result_dir",
         type=str,
@@ -195,87 +195,78 @@ def run():
         help="Set the logging level",
     )
 
-    # Verbose instruction config
+    # ==================== Shared Model / Retrieval Arguments ====================
+    parser.add_argument("--model", type=str, default="gpt-4o", help="Main model name.")
+    parser.add_argument("--max_steps", type=int, default=15, help="Maximum environment steps.")
+    parser.add_argument("--max_trajectory_length", type=int, default=8, help="History length or image turns to keep.")
+    parser.add_argument("--rag", action="store_true", help="Enable RAG context.")
+    parser.add_argument("--rag_topk", type=int, default=4, help="Top-k retrieved chunks.")
     parser.add_argument(
-        "--verbose_instruction",
-        action="store_true",
-        help="Enable verbose instruction loading",
-    )
-
-    # Shared arguments (used by multiple methods)
-    parser.add_argument("--model", type=str, default="gpt-4o", help="LLM model (spider2v_agent, agents2, agents3, gta1)")
-    parser.add_argument("--max_steps", type=int, default=15, help="Maximum steps (agents2, agents3, hisa, gta1)")
-    parser.add_argument("--max_trajectory_length", type=int, default=8, help="Max trajectory length (spider2v_agent default: 3, agents3)")
-    parser.add_argument("--model_provider", type=str, default="openai", help="Model provider (agents2, agents3)")
-    parser.add_argument(
-        "--model_url",
-        type=str,
-        default="",
-        help="The URL of the main generation model API (agents2, agents3)",
-    )
-    parser.add_argument(
-        "--model_api_key",
-        type=str,
-        default="",
-        help="The API key of the main generation model (agents2, agents3)",
-    )
-    parser.add_argument(
-        "--ground_provider",
-        type=str,
-        help="The provider for the grounding model (agents2, agents3)",
-    )
-    parser.add_argument("--ground_url", type=str, help="The URL of the grounding model (agents2, agents3)")
-    parser.add_argument(
-        "--ground_api_key",
-        type=str,
-        default="",
-        help="The API key of the grounding model (agents2, agents3)",
-    )
-    parser.add_argument(
-        "--ground_model",
-        type=str,
-        help="The model name for the grounding model (agents2, agents3)",
-    )
-    parser.add_argument(
-        "--grounding_width",
-        type=int,
-        default=1280,
-        help="Width of screenshot image after processor rescaling (agents2, agents3)",
-    )
-    parser.add_argument(
-        "--grounding_height",
-        type=int,
-        default=720,
-        help="Height of screenshot image after processor rescaling (agents2, agents3)",
-    )
-
-    # ==================== Spider2V Agent (agents.run_spider2v_agent) Arguments ====================
-    parser.add_argument("--temperature", type=float, default=1, help="Temperature")
-    parser.add_argument("--top_p", type=float, default=0.9, help="Top p")
-    parser.add_argument("--max_tokens", type=int, default=1500, help="Max tokens")
-    parser.add_argument("--stop_token", type=str, default=None, help="Stop token")
-    parser.add_argument(
-        "--observation_space",
-        choices=["screenshot", "a11y_tree", "screenshot_a11y_tree", "som"],
-        default="som",
-        help="Observation space",
-    )
-    parser.add_argument("--execution_feedback", action="store_true", help="Use execution feedback")
-    parser.add_argument("--a11y_tree_max_tokens", type=int, default=5000, help="A11y tree max tokens")
-    parser.add_argument("--example", type=str, default=os.path.join("evaluation_examples", "test_one.json"), help="Example file")
-    parser.add_argument("--rag", action="store_true", help="Enable RAG context")
-    parser.add_argument("--rag_topk", type=int, default=4, help="Top k to use for RAG")
-    parser.add_argument(
-        "--summarize_rag", action="store_true", help="Summarize RAG context"
+        "--summarize_rag", action="store_true", help="Use summarized RAG context when supported."
     )
     parser.add_argument(
         "--rag_filename",
         type=str,
         default="retrieved_chunk_size_512_chunk_overlap_20_topk_4_embed_bge-large-en-v1.5.txt",
-        help="RAG retrieved context file name",
+        help="Retrieved RAG context filename.",
     )
 
+    # ==================== Shared Backend Arguments ====================
+    parser.add_argument("--model_provider", type=str, default="openai", help="Main model provider.")
+    parser.add_argument(
+        "--model_url",
+        type=str,
+        default="",
+        help="Main model endpoint override.",
+    )
+    parser.add_argument(
+        "--model_api_key",
+        type=str,
+        default="",
+        help="Main model API key override.",
+    )
+    parser.add_argument(
+        "--ground_provider",
+        type=str,
+        help="Grounding model provider.",
+    )
+    parser.add_argument("--ground_url", type=str, help="Grounding model endpoint override.")
+    parser.add_argument(
+        "--ground_api_key",
+        type=str,
+        default="",
+        help="Grounding model API key override.",
+    )
+    parser.add_argument(
+        "--ground_model",
+        type=str,
+        help="Grounding model name.",
+    )
+    parser.add_argument(
+        "--grounding_width",
+        type=int,
+        default=1280,
+        help="Grounding image width after rescaling.",
+    )
+    parser.add_argument(
+        "--grounding_height",
+        type=int,
+        default=720,
+        help="Grounding image height after rescaling.",
+    )
+
+    # ==================== Shared Sampling Arguments ====================
+    parser.add_argument("--temperature", type=float, default=1, help="Sampling temperature.")
+    parser.add_argument("--top_p", type=float, default=0.9, help="Top-p sampling parameter.")
+    parser.add_argument("--max_tokens", type=int, default=1500, help="Maximum generation tokens.")
+    parser.add_argument("--stop_token", type=str, default=None, help="Optional stop token.")
+
     # ==================== Coact (agents.run_coact) Arguments ====================
+    # Reuse:
+    #   Environment: path_to_vm, snapshot_name, screen_width, screen_height, sleep_after_execution, client_password, headless
+    #   Task: domain, test_all_meta_path, test_config_base_dir, rerun, rerun_fail, get_score
+    #   Output: result_dir, log_level
+    #   Shared model/retrieval: rag, rag_topk, summarize_rag, rag_filename
     parser.add_argument(
         "--oai_config_path",
         type=str,
@@ -291,18 +282,13 @@ def run():
     parser.add_argument("--cua_max_steps", type=int, default=25, help="CUA max steps")
     parser.add_argument("--cut_off_steps", type=int, default=50, help="Cut off steps")
 
-    # ==================== Agents2 (agents.run_agents2) Arguments ====================
-    parser.add_argument("--endpoint_provider", type=str, default="", help="Endpoint provider")
-    parser.add_argument("--endpoint_url", type=str, default="", help="Endpoint URL")
-    parser.add_argument(
-        "--endpoint_api_key",
-        type=str,
-        default="",
-        help="The API key of the grounding model",
-    )
-    parser.add_argument("--kb_name", default="kb_s2", type=str, help="Knowledge base name for Agent S2")
-
     # ==================== Agents3 (agents.run_agents3) Arguments ====================
+    # Reuse:
+    #   Environment: path_to_vm, snapshot_name, headless, record, action_space, observation_type, screen_width, screen_height, sleep_after_execution
+    #   Task: domain, test_all_meta_path, test_config_base_dir, rerun, rerun_fail, get_score
+    #   Output: result_dir, log_level
+    #   Shared model/retrieval: model, max_steps, max_trajectory_length, rag, rag_topk, summarize_rag, rag_filename
+    #   Shared backend: model_provider, model_url, model_api_key, ground_provider, ground_url, ground_api_key, ground_model, grounding_width, grounding_height
     parser.add_argument(
         "--model_temperature",
         type=float,
@@ -311,6 +297,11 @@ def run():
     )
 
     # ==================== HiSA (agents.run_hisa) Arguments ====================
+    # Reuse:
+    #   Environment: path_to_vm, snapshot_name, screen_width, screen_height, sleep_after_execution, client_password, headless, record
+    #   Task: domain, test_all_meta_path, test_config_base_dir, rerun, rerun_fail, get_score
+    #   Output: result_dir, log_level
+    #   Shared model/retrieval: max_steps, rag, rag_topk, summarize_rag, rag_filename
     parser.add_argument(
         "--global_planner_model",
         type=str,
@@ -351,7 +342,22 @@ def run():
     parser.add_argument("--qdrant_server_url", type=str, default="http://localhost:6333", help="Qdrant server URL")
 
     # ==================== GTA1 Agent (agents.run_gta1_agent) Arguments ====================
+    # Reuse:
+    #   Environment: path_to_vm, snapshot_name, headless, record, action_space, observation_type, sleep_after_execution, screen_width, screen_height, client_password
+    #   Task: domain, test_all_meta_path, test_config_base_dir, rerun, rerun_fail, get_score
+    #   Output: result_dir, log_level
+    #   Shared model/retrieval: model, ground_model, max_steps
     parser.add_argument("--judge_model", type=str, default="gpt-4o", help="Judge model")
+
+    # ==================== LocalGUI (agents.run_local_gui) Arguments ====================
+    # Reuse:
+    #   Environment: path_to_vm, snapshot_name, screen_width, screen_height, sleep_after_execution, client_password, headless, record
+    #   Task: domain, test_all_meta_path, test_config_base_dir, rerun, rerun_fail, get_score
+    #   Output: result_dir, log_level
+    #   Shared model/retrieval: max_steps, rag, rag_topk, summarize_rag, rag_filename
+    #   Other shared: global_planner_model, visual_grounder_model, visual_grounder_scale, state_manager_model, wo_pattern, wo_roi, roi_margin, refine_period, bash_timeout, wo_step, wo_refinement, sliding_window_size
+    parser.add_argument("--wo_think", action="store_true",
+                       help="Disable thinking mode for all LocalGUI agent model calls")
 
     args = parser.parse_args()
 

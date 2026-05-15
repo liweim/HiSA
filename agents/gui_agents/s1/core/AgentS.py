@@ -4,11 +4,11 @@ import os
 from typing import Dict, List, Optional, Tuple
 import platform
 
-from gui_agents.s1.aci.ACI import ACI
-from gui_agents.s1.core.Manager import Manager
-from gui_agents.s1.core.Worker import Worker
-from gui_agents.s1.utils.common_utils import Node
-from gui_agents.utils import download_kb_data
+from agents.gui_agents.s1.aci.ACI import ACI
+from agents.gui_agents.s1.core.Manager import Manager
+from agents.gui_agents.s1.core.Worker import Worker
+from agents.gui_agents.s1.utils.common_utils import Node
+from agents.gui_agents.utils import download_kb_data
 
 logger = logging.getLogger("desktopenv.agent")
 

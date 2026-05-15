@@ -5,15 +5,15 @@ from typing import Dict, Tuple
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-from gui_agents.s2.core.module import BaseModule
-from gui_agents.s2.memory.procedural_memory import PROCEDURAL_MEMORY
-from gui_agents.s2.utils.common_utils import (
+from agents.gui_agents.s2.core.module import BaseModule
+from agents.gui_agents.s2.memory.procedural_memory import PROCEDURAL_MEMORY
+from agents.gui_agents.s2.utils.common_utils import (
     call_llm_safe,
     load_embeddings,
     load_knowledge_base,
     save_embeddings,
 )
-from gui_agents.s2.utils.query_perplexica import query_to_perplexica
+from agents.gui_agents.s2.utils.query_perplexica import query_to_perplexica
 
 
 class KnowledgeBase(BaseModule):

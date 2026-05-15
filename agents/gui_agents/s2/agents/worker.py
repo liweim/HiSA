@@ -4,11 +4,11 @@ import textwrap
 from typing import Dict, List, Tuple
 import platform
 
-from gui_agents.s2.agents.grounding import ACI
-from gui_agents.s2.core.module import BaseModule
-from gui_agents.s2.core.knowledge import KnowledgeBase
-from gui_agents.s2.memory.procedural_memory import PROCEDURAL_MEMORY
-from gui_agents.s2.utils.common_utils import (
+from agents.gui_agents.s2.agents.grounding import ACI
+from agents.gui_agents.s2.core.module import BaseModule
+from agents.gui_agents.s2.core.knowledge import KnowledgeBase
+from agents.gui_agents.s2.memory.procedural_memory import PROCEDURAL_MEMORY
+from agents.gui_agents.s2.utils.common_utils import (
     Node,
     calculate_tokens,
     call_llm_safe,

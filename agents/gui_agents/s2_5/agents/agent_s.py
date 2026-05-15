@@ -2,8 +2,8 @@ import logging
 import platform
 from typing import Dict, List, Tuple
 
-from gui_agents.s2_5.agents.grounding import ACI
-from gui_agents.s2_5.agents.worker import Worker
+from agents.gui_agents.s2_5.agents.grounding import ACI
+from agents.gui_agents.s2_5.agents.worker import Worker
 
 logger = logging.getLogger("desktopenv.agent")
 

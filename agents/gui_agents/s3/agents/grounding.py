@@ -7,10 +7,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from PIL import Image
 # from pytesseract import Output
 
-from gui_agents.s3.memory.procedural_memory import PROCEDURAL_MEMORY
-from gui_agents.s3.core.mllm import LMMAgent
-from gui_agents.s3.utils.common_utils import call_llm_safe
-from gui_agents.s3.agents.code_agent import CodeAgent
+from agents.gui_agents.s3.memory.procedural_memory import PROCEDURAL_MEMORY
+from agents.gui_agents.s3.core.mllm import LMMAgent
+from agents.gui_agents.s3.utils.common_utils import call_llm_safe
+from agents.gui_agents.s3.agents.code_agent import CodeAgent
 from agents.utils import CUA_SYSTEM_PROMPT
 import logging
 

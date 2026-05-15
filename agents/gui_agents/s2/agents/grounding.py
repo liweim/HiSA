@@ -8,9 +8,9 @@ import pytesseract
 from PIL import Image
 from pytesseract import Output
 
-from gui_agents.s2.memory.procedural_memory import PROCEDURAL_MEMORY
-from gui_agents.s2.core.mllm import LMMAgent
-from gui_agents.s2.utils.common_utils import (
+from agents.gui_agents.s2.memory.procedural_memory import PROCEDURAL_MEMORY
+from agents.gui_agents.s2.core.mllm import LMMAgent
+from agents.gui_agents.s2.utils.common_utils import (
     call_llm_safe,
     parse_single_code_from_string,
 )

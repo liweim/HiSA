@@ -2,7 +2,7 @@ import base64
 
 import numpy as np
 
-from gui_agents.s2.core.engine import (
+from agents.gui_agents.s2.core.engine import (
     LMMEngineAnthropic,
     LMMEngineAzureOpenAI,
     LMMEngineHuggingFace,

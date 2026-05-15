@@ -7,8 +7,8 @@ from typing import Dict, List, Optional, Tuple, Any, Sequence
 import numpy as np
 import requests
 
-from gui_agents.s1.aci.ACI import ACI
-from gui_agents.s1.utils.common_utils import box_iou
+from agents.gui_agents.s1.aci.ACI import ACI
+from agents.gui_agents.s1.utils.common_utils import box_iou
 
 import platform
 

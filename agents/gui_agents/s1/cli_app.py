@@ -10,7 +10,7 @@ import time
 
 import pyautogui
 
-from gui_agents.s1.core.AgentS import GraphSearchAgent, UIAgent
+from agents.gui_agents.s1.core.AgentS import GraphSearchAgent, UIAgent
 
 current_platform = platform.system().lower()
 
@@ -85,11 +85,11 @@ def signal_handler(signum, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 if current_platform == "darwin":
-    from gui_agents.s1.aci.MacOSACI import MacOSACI, UIElement
+    from agents.gui_agents.s1.aci.MacOSACI import MacOSACI, UIElement
 elif current_platform == "linux":
-    from gui_agents.s1.aci.LinuxOSACI import LinuxACI, UIElement
+    from agents.gui_agents.s1.aci.LinuxOSACI import LinuxACI, UIElement
 elif current_platform == "windows":
-    from gui_agents.s1.aci.WindowsOSACI import WindowsACI, UIElement
+    from agents.gui_agents.s1.aci.WindowsOSACI import WindowsACI, UIElement
 else:
     raise ValueError(f"Unsupported platform: {current_platform}")
 

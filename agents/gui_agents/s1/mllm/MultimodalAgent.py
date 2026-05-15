@@ -5,7 +5,7 @@
 import base64
 import re
 
-from gui_agents.s1.mllm.MultimodalEngine import (
+from agents.gui_agents.s1.mllm.MultimodalEngine import (
     LMMEngineAnthropic,
     LMMEngineAzureOpenAI,
     LMMEngineOpenAI,

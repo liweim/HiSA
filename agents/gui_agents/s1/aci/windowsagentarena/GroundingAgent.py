@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from typing import Dict, List, Tuple
 import numpy as np
 import requests
-from gui_agents.s1.utils.common_utils import box_iou
+from agents.gui_agents.s1.utils.common_utils import box_iou
 
 logger = logging.getLogger("desktopenv.agent")
 

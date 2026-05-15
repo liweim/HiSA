@@ -2,10 +2,10 @@ import logging
 import textwrap
 from typing import Dict, List, Tuple
 
-from gui_agents.s2_5.agents.grounding import ACI
-from gui_agents.s2_5.core.module import BaseModule
-from gui_agents.s2_5.memory.procedural_memory import PROCEDURAL_MEMORY
-from gui_agents.s2_5.utils.common_utils import (
+from agents.gui_agents.s2_5.agents.grounding import ACI
+from agents.gui_agents.s2_5.core.module import BaseModule
+from agents.gui_agents.s2_5.memory.procedural_memory import PROCEDURAL_MEMORY
+from agents.gui_agents.s2_5.utils.common_utils import (
     call_llm_safe,
     extract_first_agent_function,
     parse_single_code_from_string,

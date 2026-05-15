@@ -11,8 +11,8 @@ import time
 
 from PIL import Image
 
-from gui_agents.s2.agents.grounding import OSWorldACI
-from gui_agents.s2.agents.agent_s import AgentS2
+from agents.gui_agents.s2.agents.grounding import OSWorldACI
+from agents.gui_agents.s2.agents.agent_s import AgentS2
 
 current_platform = platform.system().lower()
 

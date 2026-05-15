@@ -262,10 +262,6 @@ def run(args: argparse.Namespace, logger=None, tasks=None):
                 except Exception as cleanup_error:
                     logger.warning(f"Error during cleanup: {cleanup_error}")
 
-    # Calculate and display final results
-    # Summary accepts tasks list directly
-    summary(args.result_dir, tasks)
-
 def get_examples(args, test_all_meta, logger: logging.Logger = None, easy_first: bool = True) -> List[Dict[str, str]]:
     """ Get [Filter] the list of example dict for the current experiment.
     # Filter method:

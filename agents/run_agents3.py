@@ -375,9 +375,6 @@ def run(args, logger=None, tasks=None):
         logger.info(f"Average score: {sum(scores) / len(scores)}")
     else:
         logger.info("No scores to report")
-    
-    # Summary accepts tasks list directly
-    summary(args.result_dir, tasks)
 
 if __name__ == "__main__":
     args = config()

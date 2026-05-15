@@ -3,11 +3,11 @@ from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 import platform
 
-from gui_agents.s1.aci.ACI import ACI
-from gui_agents.s1.core.BaseModule import BaseModule
-from gui_agents.s1.core.Knowledge import KnowledgeBase
-from gui_agents.s1.core.ProceduralMemory import PROCEDURAL_MEMORY
-from gui_agents.s1.utils.common_utils import (
+from agents.gui_agents.s1.aci.ACI import ACI
+from agents.gui_agents.s1.core.BaseModule import BaseModule
+from agents.gui_agents.s1.core.Knowledge import KnowledgeBase
+from agents.gui_agents.s1.core.ProceduralMemory import PROCEDURAL_MEMORY
+from agents.gui_agents.s1.utils.common_utils import (
     Dag,
     Node,
     calculate_tokens,

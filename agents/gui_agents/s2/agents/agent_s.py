@@ -4,12 +4,12 @@ import os
 import platform
 from typing import Dict, List, Optional, Tuple
 
-from gui_agents.s2.agents.grounding import ACI
-from gui_agents.s2.agents.worker import Worker
-from gui_agents.s2.agents.manager import Manager
-from gui_agents.s2.utils.common_utils import Node
-from gui_agents.utils import download_kb_data
-from gui_agents.s2.core.engine import (
+from agents.gui_agents.s2.agents.grounding import ACI
+from agents.gui_agents.s2.agents.worker import Worker
+from agents.gui_agents.s2.agents.manager import Manager
+from agents.gui_agents.s2.utils.common_utils import Node
+from agents.gui_agents.utils import download_kb_data
+from agents.gui_agents.s2.core.engine import (
     OpenAIEmbeddingEngine,
     GeminiEmbeddingEngine,
     AzureOpenAIEmbeddingEngine,

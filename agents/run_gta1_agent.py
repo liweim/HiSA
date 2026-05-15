@@ -221,10 +221,6 @@ def run(args: argparse.Namespace, logger=None, tasks=None):
                 scores[result_domain] = []
             scores[result_domain].append(score)
 
-    # Calculate and display final results with cost information
-    summary(args.result_dir, test_all_meta)
-
-
 if __name__ == "__main__":
     args = config()
     run(args)
