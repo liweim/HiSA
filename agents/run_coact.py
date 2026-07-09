@@ -10,7 +10,7 @@ import os
 from agents.coact.operator_agent import OrchestratorAgent, OrchestratorUserProxyAgent
 from agents.coact.autogen import LLMConfig
 from multiprocessing import cpu_count
-from agents.utils import build_additional_contexts, summary, serialize_json, save_args_to_settings, get_price, setup_logger, count_images_in_messages
+from agents.utils import build_additional_contexts, serialize_json, save_args_to_settings, get_price, setup_logger, count_images_in_messages
 from tqdm import tqdm
 import nest_asyncio
 nest_asyncio.apply()
@@ -519,9 +519,6 @@ def run(args, logger=None, tasks=None):
             test_all_meta[domain] = []
         test_all_meta[domain].append(task_id)
     
-    if test_all_meta:
-        summary(args.result_dir, test_all_meta)
-
 if __name__ == "__main__":
     args = config()
     run(args)

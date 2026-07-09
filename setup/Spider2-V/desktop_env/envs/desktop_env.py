@@ -324,7 +324,7 @@ class DesktopEnv(gym.Env):
         if not self.setup_controller._network_setup(self.vm_platform):
             logger.error("Network is not available!")
 
-        self._ensure_guest_python_deps()
+        # self._ensure_guest_python_deps()
 
         # Set screen resolution after network is up
         try:

@@ -9,9 +9,10 @@ from PIL import Image
 import io
 import openai
 from openai import OpenAI  # pip install --upgrade openai>=1.66.2
-from configs.config import OPENAI_API_KEY
 from agents.utils import get_price
 
+# from configs.config import OPENAI_API_KEY
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", None)
 logger = logging.getLogger("desktopenv")
 
 PROMPT_TEMPLATE = """# Task

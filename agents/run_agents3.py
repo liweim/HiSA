@@ -12,7 +12,7 @@ from tqdm import tqdm
 from agents.run_single import run_single_example
 from agents.gui_agents.s3.agents.agent_s import AgentS3
 from agents.gui_agents.s3.agents.grounding import OSWorldACI
-from agents.utils import summary, save_args_to_settings, build_additional_contexts, setup_logger
+from agents.utils import save_args_to_settings, build_additional_contexts, setup_logger
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -246,11 +246,6 @@ def run(args, logger=None, tasks=None):
         for domain in test_all_meta:
             for example_id in test_all_meta[domain]:
                 tasks.append((domain, example_id))
-    
-    # If only getting scores, skip all execution
-    if args.get_score:
-        summary(args.result_dir, tasks)
-        return
     
     save_args_to_settings(args)
 
