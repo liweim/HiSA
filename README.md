@@ -4,7 +4,9 @@
 
 - 2026-04-06: Accepted by ACL 2026 Findings 🎉
 
-This repository contains the code for the paper *HiSA: Hierarchical State Abstraction for Scalable GUI Agents*
+This repository contains the code for the paper [*HiSA: Hierarchical State Abstraction for Scalable GUI Agents*](https://aclanthology.org/2026.findings-acl.581/).
+
+**Authors:** Weiming Li, Hye-young Paik, and Yulei Sui
 
 ## 📖 Introduction
 
@@ -196,3 +198,29 @@ python run_all.py --method hisa --result_dir results/hsa_gpt5_gta1_50 --snapshot
 ## 🧩 Acknowledgements
 
 We incorporate specific prompts regarding software operation guidelines from [Agent S3](https://github.com/simular-ai/Agent-S). Additionally, the bash code execution logic is adapted from [CoAct-1](https://github.com/SalesforceAIResearch/CoAct-1).
+
+## 📚 Citation
+
+If you find HiSA useful, please cite our paper:
+
+```bibtex
+@inproceedings{li-etal-2026-hisa,
+    title = "{H}i{SA}: Hierarchical State Abstraction for Scalable {GUI} Agents",
+    author = "Li, Weiming  and
+      Paik, Hye-young  and
+      Sui, Yulei",
+    editor = "Liakata, Maria  and
+      Moreira, Viviane P.  and
+      Zhang, Jiajun  and
+      Jurgens, David",
+    booktitle = "Findings of the {A}ssociation for {C}omputational {L}inguistics: {ACL} 2026",
+    month = jul,
+    year = "2026",
+    address = "San Diego, California, United States",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2026.findings-acl.581/",
+    doi = "10.18653/v1/2026.findings-acl.581",
+    pages = "11965--11985",
+    ISBN = "979-8-89176-395-1"
+}
+```
