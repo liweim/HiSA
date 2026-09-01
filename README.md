@@ -99,6 +99,14 @@ python embedding.py
 
 ### Local VLM Deployment
 
+Run the local model servers in a separate environment from the `hisa` agent environment to avoid dependency conflicts. Create and activate a dedicated environment, then install vLLM:
+
+```bash
+conda create -n hisa-vllm python=3.11 -y
+conda activate hisa-vllm
+pip install vllm
+```
+
 Download the model parameters for UI-TARS-1.5-7B and GTA1-7B from HuggingFace.
 
 * [https://huggingface.co/ByteDance-Seed/UI-TARS-1.5-7B](https://huggingface.co/ByteDance-Seed/UI-TARS-1.5-7B)

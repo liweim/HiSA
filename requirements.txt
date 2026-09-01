@@ -121,7 +121,6 @@ ui-tars>=0.4.2.2
 unstructured
 uvicorn
 vertexai
-vllm
 volcengine-python-sdk[ark]
 wandb
 websocket_client
