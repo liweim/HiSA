@@ -1048,4 +1048,19 @@ def summary(result_dir, test_all_meta):
     return detailed_stats
 
 if __name__ == "__main__":
-    summary('results/hisa4_qwen3.5-9b', 'benchmarks/OSWorld/evaluation_examples/test_few.json')
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate a summary of test results.")
+    parser.add_argument(
+        "--result_dir",
+        required=True,
+        help="Path to the directory containing test results.",
+    )
+    parser.add_argument(
+        "--test_all_meta_path",
+        required=True,
+        help="Path to the JSON file containing test task metadata.",
+    )
+    args = parser.parse_args()
+
+    summary(args.result_dir, args.test_all_meta_path)

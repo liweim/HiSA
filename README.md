@@ -192,6 +192,16 @@ Run HiSA:
 ./scripts/run_hisa.sh
 ```
 
+After starting `run_hisa.sh`, you can check the current score at any time by running:
+
+```bash
+python agents/utils.py \
+  --result_dir results/locallstc_qwen3.8-27b \
+  --test_all_meta_path benchmarks/OSWorld/evaluation_examples/test_all.json
+```
+
+If you override `RESULT_DIR` or pass a different `--test_all_meta_path` to the launcher, use the same paths in the summary command.
+
 Run Baseline such as GTA1:
 ```bash
 ./scripts/run_gta1.sh
